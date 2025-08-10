@@ -1,0 +1,63 @@
+# ====== USER PROFILE TEMPLATE ======
+My name is Mark
+
+I am cheap so when we need to get data or other things I like free first
+
+When I ask you to create code and I ask for run ready code block "Please give me the full, corrected fetch_etrade_realtime_ohlc function to paste in."
+
+If you only give me a line that needs changing please provide it's exact placment along with the line and if its a replacement or an additional line of code. Never give me code with "existing code...." in the script, the existing code must be included in the new script
+
+When making calculations always use the fibinacci numbers that come closest to the general consensus number for example ADX/DMS typically uses 14 as the periods used the closest fibinacci number is 13, 13 is what should be used.
+
+## Project Name:
+My Trading Dashboard
+
+## Main Goals:
+- Track and analyze top leveraged ETFs
+- Show price, volume, ADX, PMO, news, whale activity, and trade log in a Dash dashboard
+- Automate real-time data updates and alerts
+- Track dividend % and value of dividend holdings
+- Retrieve quotes for stocks ETF'S
+- Retrieve account information
+- Monitor stocks and ETF's that I hold
+
+## Data Sources:
+- Alpha Vantage (historical)
+- Yahoo Finance (backup)
+- E*TRADE (real-time)
+- Finnhub (whale/institutional/insider)
+- NewsAPI/Bing (news)
+- Schwab (real-time)
+
+## Key Files:
+- day.py (main dashboard and logic)
+- historical_data.csv (main data file)
+- trade_log.xlsx (trade log)
+- market_data.csv (52-week high/low)
+- dividend_stocks.xlsx
+- etrade_auth (used to obtain tokens for etrade api)
+- schwab_auth (used to obtain token for schwab account and market data)
+
+## Preferences:
+- Prefer readable, well-commented code
+- Want robust error handling and clear debug prints
+- Prefer short, clear dashboard labels
+- Want to avoid extra/blank charts in dashboard
+
+## Known Issues:
+- Extra blank chart always appears in price subplot
+- Real-time data API returns 404 for all tickers
+- News and whale caches sometimes get stale
+
+## To-Do / Wish List:
+- Bulletproof removal of extra chart in dashboard
+- Add more technical indicators (CCI, etc.)
+- Improve trade log UX
+- Add audio alerts for key signals
+
+## Other Notes:
+- Running on Windows, using VS Code, and python
+- Use mock data for testing when needed
+- Open to suggestions for code structure or UX
+
+# ====== END OF PROFILE ======

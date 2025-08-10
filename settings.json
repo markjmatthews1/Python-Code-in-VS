@@ -1,0 +1,4 @@
+{
+  "dashboard_interval": 5,
+  "volatility_lookback_bars": 1
+}

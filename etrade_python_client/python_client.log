@@ -1,0 +1,284 @@
+05/09/2025 09:43:33 AM Request Header: {'User-Agent': 'python-requests/2.32.3', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+05/09/2025 09:43:33 AM Request Header: {'User-Agent': 'python-requests/2.32.3', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+05/09/2025 09:43:33 AM Request Header: {'User-Agent': 'python-requests/2.32.3', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+05/09/2025 09:43:33 AM Request Header: {'User-Agent': 'python-requests/2.32.3', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive'}
+05/09/2025 09:43:33 AM Response Body: {
+    "QuoteResponse": {
+        "QuoteData": [
+            {
+                "All": {
+                    "adjustedFlag": false,
+                    "ask": 490.64,
+                    "askSize": 300,
+                    "askTime": "09:43:31 EDT 05-09-2025",
+                    "averageVolume": 35620246,
+                    "beta": 1.21,
+                    "bid": 490.6,
+                    "bidExchange": "",
+                    "bidSize": 900,
+                    "bidTime": "09:43:31 EDT 05-09-2025",
+                    "cashDeliverable": 0,
+                    "changeClose": 2.2913,
+                    "changeClosePercentage": 0.47,
+                    "companyName": "INVESCO QQQ TRUST SERIES I",
+                    "contractSize": 0.0,
+                    "daysToExpiration": 0,
+                    "declaredDividend": 0.7157,
+                    "dirLast": "1",
+                    "dividend": 0.7157,
+                    "dividendPayableDate": 1746020613,
+                    "eps": 0.0,
+                    "estEarnings": 0.0,
+                    "exDividendDate": 1742823813,
+                    "expirationDate": 0,
+                    "high": 491.54,
+                    "high52": 540.81,
+                    "intrinsicValue": 0.0,
+                    "lastTrade": 490.5813,
+                    "low": 490.2,
+                    "low52": 402.39,
+                    "marketCap": 307643533230.0,
+                    "nextEarningDate": "",
+                    "open": 490.21,
+                    "openInterest": 0,
+                    "optionMultiplier": 0.0,
+                    "optionStyle": "",
+                    "optionUnderlier": "",
+                    "pe": 0.0,
+                    "previousClose": 488.29,
+                    "previousDayVolume": 39469556,
+                    "primaryExchange": "NSDQ",
+                    "sharesOutstanding": 627100000,
+                    "symbolDescription": "INVESCO QQQ TRUST SERIES I",
+                    "timeOfLastTrade": 1746798211,
+                    "timePremium": 0.0,
+                    "totalVolume": 2991608,
+                    "upc": 0,
+                    "week52HiDate": 1739976213,
+                    "week52LowDate": 1744033413,
+                    "yield": 0.6121
+                },
+                "Product": {
+                    "securitySubType": "ETF",
+                    "securityType": "EQ",
+                    "symbol": "QQQ"
+                },
+                "ahFlag": "false",
+                "dateTime": "09:43:31 EDT 05-09-2025",
+                "dateTimeUTC": 1746798211,
+                "hasMiniOptions": false,
+                "quoteStatus": "REALTIME"
+            }
+        ]
+    }
+}
+05/09/2025 09:43:33 AM Response Body: {
+    "QuoteResponse": {
+        "QuoteData": [
+            {
+                "All": {
+                    "adjustedFlag": false,
+                    "ask": 490.64,
+                    "askSize": 300,
+                    "askTime": "09:43:31 EDT 05-09-2025",
+                    "averageVolume": 35620246,
+                    "beta": 1.21,
+                    "bid": 490.6,
+                    "bidExchange": "",
+                    "bidSize": 900,
+                    "bidTime": "09:43:31 EDT 05-09-2025",
+                    "cashDeliverable": 0,
+                    "changeClose": 2.2913,
+                    "changeClosePercentage": 0.47,
+                    "companyName": "INVESCO QQQ TRUST SERIES I",
+                    "contractSize": 0.0,
+                    "daysToExpiration": 0,
+                    "declaredDividend": 0.7157,
+                    "dirLast": "1",
+                    "dividend": 0.7157,
+                    "dividendPayableDate": 1746020613,
+                    "eps": 0.0,
+                    "estEarnings": 0.0,
+                    "exDividendDate": 1742823813,
+                    "expirationDate": 0,
+                    "high": 491.54,
+                    "high52": 540.81,
+                    "intrinsicValue": 0.0,
+                    "lastTrade": 490.5813,
+                    "low": 490.2,
+                    "low52": 402.39,
+                    "marketCap": 307643533230.0,
+                    "nextEarningDate": "",
+                    "open": 490.21,
+                    "openInterest": 0,
+                    "optionMultiplier": 0.0,
+                    "optionStyle": "",
+                    "optionUnderlier": "",
+                    "pe": 0.0,
+                    "previousClose": 488.29,
+                    "previousDayVolume": 39469556,
+                    "primaryExchange": "NSDQ",
+                    "sharesOutstanding": 627100000,
+                    "symbolDescription": "INVESCO QQQ TRUST SERIES I",
+                    "timeOfLastTrade": 1746798211,
+                    "timePremium": 0.0,
+                    "totalVolume": 2991608,
+                    "upc": 0,
+                    "week52HiDate": 1739976213,
+                    "week52LowDate": 1744033413,
+                    "yield": 0.6121
+                },
+                "Product": {
+                    "securitySubType": "ETF",
+                    "securityType": "EQ",
+                    "symbol": "QQQ"
+                },
+                "ahFlag": "false",
+                "dateTime": "09:43:31 EDT 05-09-2025",
+                "dateTimeUTC": 1746798211,
+                "hasMiniOptions": false,
+                "quoteStatus": "REALTIME"
+            }
+        ]
+    }
+}
+05/09/2025 09:43:33 AM Response Body: {
+    "QuoteResponse": {
+        "QuoteData": [
+            {
+                "All": {
+                    "adjustedFlag": false,
+                    "ask": 490.64,
+                    "askSize": 300,
+                    "askTime": "09:43:31 EDT 05-09-2025",
+                    "averageVolume": 35620246,
+                    "beta": 1.21,
+                    "bid": 490.6,
+                    "bidExchange": "",
+                    "bidSize": 900,
+                    "bidTime": "09:43:31 EDT 05-09-2025",
+                    "cashDeliverable": 0,
+                    "changeClose": 2.2913,
+                    "changeClosePercentage": 0.47,
+                    "companyName": "INVESCO QQQ TRUST SERIES I",
+                    "contractSize": 0.0,
+                    "daysToExpiration": 0,
+                    "declaredDividend": 0.7157,
+                    "dirLast": "1",
+                    "dividend": 0.7157,
+                    "dividendPayableDate": 1746020613,
+                    "eps": 0.0,
+                    "estEarnings": 0.0,
+                    "exDividendDate": 1742823813,
+                    "expirationDate": 0,
+                    "high": 491.54,
+                    "high52": 540.81,
+                    "intrinsicValue": 0.0,
+                    "lastTrade": 490.5813,
+                    "low": 490.2,
+                    "low52": 402.39,
+                    "marketCap": 307643533230.0,
+                    "nextEarningDate": "",
+                    "open": 490.21,
+                    "openInterest": 0,
+                    "optionMultiplier": 0.0,
+                    "optionStyle": "",
+                    "optionUnderlier": "",
+                    "pe": 0.0,
+                    "previousClose": 488.29,
+                    "previousDayVolume": 39469556,
+                    "primaryExchange": "NSDQ",
+                    "sharesOutstanding": 627100000,
+                    "symbolDescription": "INVESCO QQQ TRUST SERIES I",
+                    "timeOfLastTrade": 1746798211,
+                    "timePremium": 0.0,
+                    "totalVolume": 2991608,
+                    "upc": 0,
+                    "week52HiDate": 1739976213,
+                    "week52LowDate": 1744033413,
+                    "yield": 0.6121
+                },
+                "Product": {
+                    "securitySubType": "ETF",
+                    "securityType": "EQ",
+                    "symbol": "QQQ"
+                },
+                "ahFlag": "false",
+                "dateTime": "09:43:31 EDT 05-09-2025",
+                "dateTimeUTC": 1746798211,
+                "hasMiniOptions": false,
+                "quoteStatus": "REALTIME"
+            }
+        ]
+    }
+}
+05/09/2025 09:43:33 AM Response Body: {
+    "QuoteResponse": {
+        "QuoteData": [
+            {
+                "All": {
+                    "adjustedFlag": false,
+                    "ask": 490.64,
+                    "askSize": 300,
+                    "askTime": "09:43:31 EDT 05-09-2025",
+                    "averageVolume": 35620246,
+                    "beta": 1.21,
+                    "bid": 490.6,
+                    "bidExchange": "",
+                    "bidSize": 900,
+                    "bidTime": "09:43:31 EDT 05-09-2025",
+                    "cashDeliverable": 0,
+                    "changeClose": 2.2913,
+                    "changeClosePercentage": 0.47,
+                    "companyName": "INVESCO QQQ TRUST SERIES I",
+                    "contractSize": 0.0,
+                    "daysToExpiration": 0,
+                    "declaredDividend": 0.7157,
+                    "dirLast": "1",
+                    "dividend": 0.7157,
+                    "dividendPayableDate": 1746020613,
+                    "eps": 0.0,
+                    "estEarnings": 0.0,
+                    "exDividendDate": 1742823813,
+                    "expirationDate": 0,
+                    "high": 491.54,
+                    "high52": 540.81,
+                    "intrinsicValue": 0.0,
+                    "lastTrade": 490.5813,
+                    "low": 490.2,
+                    "low52": 402.39,
+                    "marketCap": 307643533230.0,
+                    "nextEarningDate": "",
+                    "open": 490.21,
+                    "openInterest": 0,
+                    "optionMultiplier": 0.0,
+                    "optionStyle": "",
+                    "optionUnderlier": "",
+                    "pe": 0.0,
+                    "previousClose": 488.29,
+                    "previousDayVolume": 39469556,
+                    "primaryExchange": "NSDQ",
+                    "sharesOutstanding": 627100000,
+                    "symbolDescription": "INVESCO QQQ TRUST SERIES I",
+                    "timeOfLastTrade": 1746798211,
+                    "timePremium": 0.0,
+                    "totalVolume": 2991608,
+                    "upc": 0,
+                    "week52HiDate": 1739976213,
+                    "week52LowDate": 1744033413,
+                    "yield": 0.6121
+                },
+                "Product": {
+                    "securitySubType": "ETF",
+                    "securityType": "EQ",
+                    "symbol": "QQQ"
+                },
+                "ahFlag": "false",
+                "dateTime": "09:43:31 EDT 05-09-2025",
+                "dateTimeUTC": 1746798211,
+                "hasMiniOptions": false,
+                "quoteStatus": "REALTIME"
+            }
+        ]
+    }
+}

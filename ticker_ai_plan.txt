@@ -1,0 +1,95 @@
+Key Steps for Building Your Ticker Ranking AI and Machine Learning app
+
+Make sure code is well documented
+
+App is called ai_module.py
+
+Gets data from data_provider.py
+
+==========================
+Progress & Next Steps
+==========================
+
+✅ Step 1: Feature extraction and normalization complete
+✅ Step 2: Model training and ranking code scaffolded and tested
+
+➡️ Next up:
+- Test model training with more historical data (ideally with real profit/loss labels)
+- Refine the labeling logic for “profitable” trades
+- Integrate live ranking into the GUI or a scheduled script
+- Add error handling and logging for production use
+
+Last worked on: 2025-06-10
+
+start 6/18/25 next steps
+
+1. Model Validation (should come right after training)
+Split your historical data into training and validation sets (e.g., 80/20 split).
+Train on the training set, evaluate on the validation set, and print metrics.
+2. Model Saving (after validation)
+Save your trained model to disk so you can reload it for live predictions.
+3. Real-Time Prediction Integration
+Add a function to fetch real-time data, extract features, and use the saved model to make predictions/rankings.
+
+✅ Step 1: Define Features for ML Model
+•	Open, High, Low, Close, Volume (OHLCV) once real-time data is available.
+•	Bid-Ask spread for liquidity analysis.
+•	Moving averages (SMA, EMA) for trend detection.
+•	Relative Strength Index (RSI) and MACD for momentum signals.
+•	Real-time order book depth (if Schwab provides it).
+✅ Step 2: Select a Machine Learning Approach
+•	Random Forests or XGBoost: Great for ranking models based on historical patterns.
+•	Recurrent Neural Networks (RNNs): If you want to factor in sequential time-series behavior.
+•	Transformer-based models: Could give high adaptability for real-time adjustments.
+✅ Step 3: Data Preprocessing & Pipeline Setup
+•	Pull historical & real-time market data from Schwab.
+•	Normalize values (standardize indicators for better model learning).
+•	Use feature engineering to extract market signals relevant to ranking.
+✅ Step 4: Model Training & Live Predictions
+•	Train the model on past market trends.
+•	Feed incoming tickers and rank them based on profitability probability.
+•	Generate buy/sell confidence levels for each ticker.
+✅ Step 5: Deployment & Live Strategy Integration
+•	Run live inference, dynamically updating ranks as new data flows in.
+•	Tune model parameters based on real-time market movement feedback.
+
+1. Expanded Feature Set
+•	Volatility indicators: ATR (Average True Range), Bollinger Bands width.
+•	Calendar features: Day of week, time of day, market open/close proximity.
+•	News sentiment: If available, use NLP on news headlines or social sentiment.
+•	Sector/industry performance: Relative strength vs. sector/market.
+•	Event flags: Earnings, dividends, splits, Fed announcements, etc.
+•	Custom signals: Your own rules or signals (e.g., gap up/down, volume spikes).
+2. Data Management
+•	Robust data pipeline: Handle missing data, outliers, and data lags.
+•	Backtesting framework: Simulate trades on historical data to validate strategies.
+•	Data labeling: For supervised learning, label data with “profitable”/“not profitable” or regression targets (e.g., future return).
+________________________________________
+3. Model Management
+•	Model versioning: Track which model is in production, and keep logs of predictions.
+•	Hyperparameter tuning: Use grid/random search or Bayesian optimization.
+•	Ensemble methods: Combine predictions from multiple models for robustness.
+________________________________________
+4. Risk & Money Management
+•	Position sizing: Integrate Kelly criterion, volatility targeting, or fixed fractional sizing.
+•	Stop-loss/take-profit logic: Model can suggest optimal exit points, not just entries.
+•	Drawdown monitoring: Alert or halt trading if losses exceed a threshold.
+________________________________________
+5. Live Integration & Monitoring
+•	Real-time monitoring: Track model performance, latency, and prediction drift.
+•	Fallback logic: If model confidence is low or data is missing, revert to rule-based logic or “no trade.”
+•	Logging & audit: Store all predictions, trades, and outcomes for review.
+________________________________________
+6. Extensibility for Longer-Term Trades
+•	Multi-timeframe features: Add daily/weekly indicators alongside intraday.
+•	Holding period prediction: Model can suggest not just “buy/sell” but “hold for X days.”
+•	Regime detection: Detect bull/bear/sideways markets and adapt strategy.
+________________________________________
+7. Compliance & Safety
+•	Paper trading mode: For safe testing before going live.
+•	Order validation: Double-check orders before sending to broker.
+•	Rate limiting: Avoid API bans or excessive trading.
+________________________________________
+8. Documentation & Usability
+•	Clear API: Your ai_module.py should have a simple function like get_ticker_ranking(tickers, features) returning ranked tickers and confidence.
+•	Configurable parameters: Allow easy tuning of thresholds, features, and model choice.

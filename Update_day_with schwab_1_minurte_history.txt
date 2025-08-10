@@ -1,0 +1,84 @@
+Absolutely! Here’s a **summary plan** and a checklist for updating your day trading app to use Schwab 1-minute history, with notes on what to update in your current day.py:
+
+---
+
+## **Day Trading App: Schwab 1-Minute Data Integration Plan**
+
+### **1. Startup: Fresh Data File**
+- At app start, **delete or archive any existing `historical_data.csv`**.
+- **Fetch 1-minute history for all tickers/ETFs in your Excel list** (no longer limited to 24).
+- **Create a new `historical_data.csv`** with this data.
+
+### **2. Top 5 Selection**
+- Use the fresh `historical_data.csv` to **select the top 5 ETFs** for the day (using your ranking logic).
+
+### **3. Ongoing Data Collection**
+- **Every minute:**  
+  - Pull the latest 1-minute bar for each of the current top 5 ETFs.
+  - **Append** this data to `historical_data.csv`.
+  - **Update the dashboard** with the latest data.
+
+### **4. Top 5 Reevaluation**
+- **At 10:30 and 11:30:**  
+  - **Re-run the top 5 selection** using the latest `historical_data.csv`.
+  - If the top 5 list changes:
+    - **Begin pulling 1-minute data for any new ETFs** in the list.
+    - **Stop pulling for any ETFs no longer in the top 5.**
+
+### **5. End of Day**
+- Optionally, **archive or delete `historical_data.csv`** at market close.
+
+---
+
+## **Areas to Update in day.py**
+
+### **A. Remove/Replace AlphaVantage Historical Fetch**
+- **Remove all AlphaVantage historical data fetch logic**.
+- **Replace with Schwab 1-minute history fetch** for all tickers in Excel.
+
+### **B. Remove Rate Limit Logic**
+- **Remove any code that restricts the number of tickers** (no more 24 limit).
+- **Remove any AlphaVantage rate limit handling**.
+
+### **C. Update Ticker List Handling**
+- **Update ticker loading** to use the full list from Excel, not just the first 24.
+
+### **D. File Handling**
+- **At startup, delete or archive `historical_data.csv`**.
+- **Always create a new file with Schwab data at the start of the day**.
+
+### **E. Ongoing Data Fetch**
+- **Set up a timer/task to fetch the latest 1-minute bar for each top 5 ETF every minute**.
+- **Append new bars to `historical_data.csv`**.
+
+### **F. Top 5 Reevaluation**
+- **Schedule reevaluation of the top 5 at 10:30 and 11:30**.
+- **Update the list of ETFs being polled as needed**.
+
+### **G. Remove Unused Code**
+- **Remove any functions, imports, or logic related to:**
+  - AlphaVantage
+  - Old rate limiting
+  - Unused token loaders or refreshers
+  - Any legacy data sources not being used
+
+---
+
+## **Summary Checklist for Your Plan File**
+
+1. **At startup:**  
+   - Archive/delete old `historical_data.csv`
+   - Fetch Schwab 1-min history for all tickers in Excel
+   - Save as new `historical_data.csv`
+2. **Select top 5 ETFs** using new data
+3. **Every minute:**  
+   - Fetch latest 1-min bar for each top 5 ETF
+   - Append to `historical_data.csv`
+   - Update dashboard
+4. **At 10:30 and 11:30:**  
+   - Re-select top 5 ETFs
+   - Update polling list as needed
+5. **End of day:**  
+   - Archive/delete `historical_data.csv`
+6. **Remove all AlphaVantage and unused code**
+

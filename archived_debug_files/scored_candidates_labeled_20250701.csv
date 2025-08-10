@@ -1,0 +1,9 @@
+Ticker,Avg Div Interval,Est. Frequency,Yield Est (%),EPS,Payout Ratio,Beta,Div History (yrs),5Y Growth Rate (%),Debt/Equity,Sector,Industry,Source,Continuation Prob (%),Label
+ECC,34.0,11,20.1,0.86,1.97,0.43,10.7,-12.0,37.97,Financial Services,Asset Management,FMP,100.0,1
+ORC,30.5,12,20.54,0.58,2.46,1.5,12.3,-0.95,749.95,Real Estate,REIT - Mortgage,FMP,100.0,1
+ARR,31.9,11,15.7,-0.28,-11.32,1.35,15.3,-3.28,737.28,Real Estate,REIT - Mortgage,FMP,100.0,1
+ACP,30.5,12,15.76,1.27,1.08,0.86,14.2,-3.58,27.91,Financial Services,Asset Management,FMP,100.0,1
+NXDT,33.2,11,39.38,,-0.2,0.83,18.7,0.0,43.4,Real Estate,REIT - Diversified,FMP,,0
+ECAT,30.4,12,22.16,2.37,1.2,N/A,3.5,36.43,N/A,Financial Services,Asset Management,FMP,,1
+BCAT,30.4,12,22.05,1.83,1.45,N/A,4.5,24.44,N/A,Financial Services,Asset Management,FMP,,1
+CCIF,30.6,12,19.44,,2.65,N/A,8.6,13.63,N/A,Financial Services,Asset Management,FMP,,1

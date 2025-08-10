@@ -1,0 +1,10 @@
+Ticker,Avg Div Interval,Yield Est (%),EPS,Payout Ratio,Beta,Div History (yrs),5Y Growth Rate (%),Debt/Equity,Sector,Industry,Continuation Prob (%),Label
+MAIN,30.0,8.5,2.1,0.65,0.85,7,4.0,0.6,Financial Services,Asset Management,70,1
+OXLC,45.0,16.2,1.3,1.05,0.92,5,2.5,1.2,Financial Services,Asset Management,45,1
+RA,30.4,13.7,0.9,1.15,1.1,6,3.1,1.5,Financial Services,Asset Management,55,1
+ECC,33.9,17.5,1.1,1.2,0.75,4,1.8,0.8,Financial Services,Asset Management,35,1
+PFLT,30.4,10.8,2.0,0.58,0.65,8,5.2,0.5,Financial Services,Asset Management,70,1
+ARCC,91.2,9.3,2.4,0.7,0.9,10,6.3,0.7,Financial Services,Asset Management,80,0
+SLRC,76.3,9.0,1.8,0.68,0.8,9,4.9,0.6,Financial Services,Asset Management,70,0
+CGBD,91.3,10.1,2.2,0.66,0.88,7,4.5,0.9,Financial Services,Asset Management,70,0
+ORCC,90.0,0.0,0.0,0.0,0.0,0,0.0,0.0,,,25,0

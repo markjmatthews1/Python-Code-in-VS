@@ -1,0 +1,47 @@
+# Customer Manager GUI
+
+This is a simple GUI application to collect and display customer names and ages.
+
+## Requirements
+
+- Python 3.x
+- Tkinter (usually included with Python)
+- pandas
+
+## How to Run
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Run the application:
+   ```bash
+   python src/main.py
+   ```
+   input(Name, Age) 
+    click on Add button to add the customer
+    click on Show button to display the customer details
+
+import pandas as pd
+
+# Initialize an empty DataFrame with columns for Name and Age
+df = pd.DataFrame(columns=["Name", "Age"])
+
+while True:
+    # Get customer details
+    name = input("Enter customer name (or type 'exit' to quit): ")
+    if name.lower() == 'exit':
+        break
+    age = input("Enter customer age: ")
+    
+    # Add the new customer to the DataFrame
+    df = pd.concat([df, pd.DataFrame({"Name": [name], "Age": [age]})], ignore_index=True)
+    
+    print("\nCurrent DataFrame:")
+    print(df)
+
+# Save the DataFrame to a CSV file
+file_name = "customers.csv"
+df.to_csv(file_name, index=False)
+print(f"\nCustomer data saved to {file_name}")

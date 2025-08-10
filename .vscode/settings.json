@@ -1,0 +1,76 @@
+{
+    // === EXISTING PYTHON SETTINGS ===
+    "python.terminal.activateEnvironment": false,
+    "python.defaultInterpreterPath": "C:\\Users\\mjmat\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "python.terminal.activateEnvInCurrentTerminal": false,
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": [],
+    
+    // === PERFORMANCE OPTIMIZATIONS ===
+    
+    // Reduce Python language server overhead
+    "python.analysis.autoImportCompletions": false,
+    "python.analysis.indexing": false,
+    "python.analysis.packageIndexDepths": [
+        {"name": "", "depth": 2}
+    ],
+    "python.analysis.memory.keepLibraryAst": false,
+    
+    // Reduce file watching overhead for your trading files
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/node_modules/**": true,
+        "**/__pycache__/**": true,
+        "**/*.pyc": true,
+        "**/backup_ticker_list_*.json": true,
+        "**/fmp_daily_results_*.csv": true,
+        "**/*_backup_*.xlsx": true,
+        "**/Bryan Perry Transactions_BACKUP_*.xlsx": true
+    },
+    
+    // Optimize IntelliSense responsiveness
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": false,
+        "strings": false
+    },
+    "editor.suggestOnTriggerCharacters": false,
+    "editor.parameterHints.enabled": false,
+    "editor.wordBasedSuggestions": "off",
+    
+    // Reduce auto-save frequency
+    "files.autoSave": "onFocusChange",
+    "files.autoSaveDelay": 3000,
+    
+    // Optimize search to ignore trading data files
+    "search.exclude": {
+        "**/.git": true,
+        "**/node_modules": true,
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/backup_*": true,
+        "**/*_BACKUP_*": true,
+        "**/fmp_daily_results_*.csv": true
+    },
+    
+    // Reduce terminal overhead
+    "terminal.integrated.enablePersistentSessions": false,
+    "terminal.integrated.scrollback": 1000,
+    
+    // Optimize editor rendering
+    "editor.renderWhitespace": "none",
+    "editor.renderControlCharacters": false,
+    "editor.minimap.enabled": false,
+    "editor.codeLens": false,
+    "editor.lightbulb.enabled": "off",
+    
+    // Reduce extension overhead
+    "extensions.autoCheckUpdates": false,
+    "extensions.autoUpdate": false,
+    
+    // Git optimizations
+    "git.enabled": true,
+    "git.autorefresh": false,
+    "git.decorations.enabled": false,
+    "git.statusLimit": 5000
+}

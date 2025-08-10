@@ -1,0 +1,7 @@
+venv312/
+*.pyc
+__pycache__/
+.env
+*.pkl
+*.log
+*.xlsx.backup

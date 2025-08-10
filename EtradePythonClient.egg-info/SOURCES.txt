@@ -1,0 +1,7 @@
+README.md
+setup.py
+EtradePythonClient.egg-info/PKG-INFO
+EtradePythonClient.egg-info/SOURCES.txt
+EtradePythonClient.egg-info/dependency_links.txt
+EtradePythonClient.egg-info/top_level.txt
+etrade_python_client/etrade_python_client.py

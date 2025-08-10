@@ -1,0 +1,946 @@
+{
+  "TQQQ": [
+    "2025-08-08T19:16:05.784905+00:00",
+    [
+      {
+        "title": "Recession Talk Is Back, But Confirming Data Still Missing",
+        "sentiment": "Negative",
+        "url": "https://finnhub.io/api/news?id=9d611f6ee06bf277fd91567e579308ab0e909dc9b990335498cb0168b275844d"
+      },
+      {
+        "title": "Weekly Market Pulse: A River In Egypt",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=31c3fdcedd569b9e03f01a8e9b7fd8011ce827bc9c4adcf2e453ef805f37ea0d"
+      },
+      {
+        "title": "Erosion Goes On For SPUU",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=83b03d11cf478f19378b367aea0d88b1b27dcb6f8fb111a3b52734bb8fc962d4"
+      }
+    ]
+  ],
+  "TECL": [
+    "2025-08-08T19:01:13.524873+00:00",
+    []
+  ],
+  "BITX": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T14:42:50.901041+00:00",
+          [
+            {
+              "title": "2x Bitcoin Strategy ETF Sees Unusually Large Options Volume (NYSEARCA:BITX)",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "2x Bitcoin Strategy ETF (NYSEARCA:BITX) Stock Price Down 4.6% \u2013 What\u2019s Next?",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Bitcoin back above $100,000: Financial planning icon Ric Edelman reacts to the crypto ETF boom",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Dharma ransomware (.id-[random 8 hex].[].dharma) Support Topic",
+              "sentiment": "Neutral"
+            }
+          ]
+        ]
+      ]
+    ]
+  ],
+  "MSTX": [
+    "2025-08-08T19:16:06.341132+00:00",
+    []
+  ],
+  "BITU": [
+    "2025-08-08T19:16:07.046425+00:00",
+    []
+  ],
+  "USD": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T14:42:54.561113+00:00",
+          [
+            {
+              "title": "This modern cassette boombox will lure you in with glowing VU meters",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "I traveled in business class on a train from Rome to Florence. For $45, it was the best investment for my trip.",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Bitcoin conference: DJT, GameStop, & more race to buy bitcoin",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Switch 2 Scalpers Are Auctioning Off Their Preorders to the Highest Bidder",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Bitcoin price holds above $102,000 as BlackRock leads fund inflows",
+              "sentiment": "Neutral"
+            }
+          ]
+        ]
+      ]
+    ]
+  ],
+  "ETHU": [
+    "2025-08-08T19:01:12.265972+00:00",
+    []
+  ],
+  "ROM": [
+    "2025-08-08T19:16:07.602463+00:00",
+    []
+  ],
+  "NVDU": [
+    "2025-07-28T20:52:14.959460+00:00",
+    []
+  ],
+  "LABU": [
+    "2025-08-08T19:01:12.766428+00:00",
+    [
+      {
+        "title": "Erosion Goes On For SPUU",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=83b03d11cf478f19378b367aea0d88b1b27dcb6f8fb111a3b52734bb8fc962d4"
+      }
+    ]
+  ],
+  "GDXU": [
+    "2025-08-08T19:16:08.396160+00:00",
+    []
+  ],
+  "NUGT": [
+    "2025-08-08T19:16:08.906636+00:00",
+    []
+  ],
+  "SMCX": [
+    "2025-08-08T19:16:09.207162+00:00",
+    []
+  ],
+  "CWEB": [
+    "2025-08-08T19:16:09.778164+00:00",
+    []
+  ],
+  "JNUG": [
+    "2025-08-08T19:16:10.347084+00:00",
+    []
+  ],
+  "NAIL": [
+    "2025-08-08T19:16:10.990845+00:00",
+    [
+      {
+        "title": "New Homes Tantalizingly Closer To Being Affordable, But Remain Out Of Reach For Typical U.S. Household",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=941dd2455b95261e2a64430a719f3298c3433d8d7b5b801310e488be844e7969"
+      },
+      {
+        "title": "ITB: A Guide To Understanding This Homebuilders ETF",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=08c51a3a8bed53873d23063a397ccc4a615ec58d994f42aefa421509a40fa626"
+      },
+      {
+        "title": "The Coming Baby Boomer Bust",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=b3aa2202d9e13bad2c682cfd23082aa0bc4a555b231d7f3f95fff91b06cfdc97"
+      },
+      {
+        "title": "Behind The (Revised) Curve",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=6b8e9c7cbe01fdb8845292d7e099ebb099c1dfada2df6fa8f5577b9cc7ba07b4"
+      }
+    ]
+  ],
+  "DFEN": [
+    "2025-08-08T19:16:11.517844+00:00",
+    []
+  ],
+  "ERX": [
+    "2025-08-08T19:16:12.042233+00:00",
+    [
+      {
+        "title": "The Case For The ERX ETF Product",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=235ace5ed89b899212eeb77962f4b893f113204bbefc8c1de33cd6462af940f2"
+      }
+    ]
+  ],
+  "SDOW": [
+    "2025-08-08T19:16:12.537395+00:00",
+    [
+      {
+        "title": "SDOW Can Be Utilized To Trade Market Turbulence",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=7b8fe101e2fde3bd27df9a646ae9a0c19362dcaca2f7585175c058777e612047"
+      },
+      {
+        "title": "Recession Talk Is Back, But Confirming Data Still Missing",
+        "sentiment": "Negative",
+        "url": "https://finnhub.io/api/news?id=9d611f6ee06bf277fd91567e579308ab0e909dc9b990335498cb0168b275844d"
+      },
+      {
+        "title": "Weekly Market Pulse: A River In Egypt",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=31c3fdcedd569b9e03f01a8e9b7fd8011ce827bc9c4adcf2e453ef805f37ea0d"
+      },
+      {
+        "title": "Erosion Goes On For SPUU",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=83b03d11cf478f19378b367aea0d88b1b27dcb6f8fb111a3b52734bb8fc962d4"
+      }
+    ]
+  ],
+  "TMV": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T14:42:54.216080+00:00",
+          [
+            {
+              "title": "Shareholders of Tejon Ranch Co. Urged to Vote for an Accountable Board of Directors",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "\ubbf8\u00b7\uc911 \uae34\uc7a5 \uc644\ud654 \uae30\ub300\uac10\uacfc \uae08\ub9ac\uc778\ud558 \uc9c0\uc5f0 \uc804\ub9dd",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Thermostatic Mixing Valve Market to Reach USD 1,749.6 million By 2032, Growing At An 5 % CAGR - Credence Research",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "US aid freeze leaves TB survivors in India high and dry",
+              "sentiment": "Neutral"
+            },
+            {
+              "title": "Contribution of the tobamovirus resistance gene Tm-1 to control of tomato brown rugose fruit virus (ToBRFV) resistance in tomato",
+              "sentiment": "Neutral"
+            }
+          ]
+        ]
+      ]
+    ]
+  ],
+  "BOIL": [
+    "2025-08-08T19:16:13.120928+00:00",
+    [
+      {
+        "title": "Natural Gas Holds Near $3.10 As Triangle Consolidation And EU Oversupply Limit Upside (Technical Analysis)",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=eded2834e7ab47b7061bf926563ccb9d673b7a4077c54d1047336422448b06be"
+      },
+      {
+        "title": "U.S. May Oil Production Hits New High Again",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=eb1bbbb11dba8099d28c2b2e9dce495ffce91969235ffb03f77ec1e65b192f53"
+      },
+      {
+        "title": "BOIL: Look Elsewhere To Bet On U.S. Increasing Energy Exports",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e8a0a09ffb25deea428e280e2b92f5848ee0d8f6dcece9c648662be9859cc12a"
+      },
+      {
+        "title": "Natural Gas Steadies Near $3 As U.S. Futures Weaken Despite Europe's Supply Risks",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=fbadb4fcbbb1c9c03bd33aca3b5e07ca707cb4336a8a5840522abdcaee4f12a0"
+      }
+    ]
+  ],
+  "MSFU": [
+    "2025-08-08T19:16:13.621716+00:00",
+    []
+  ],
+  "AGQ": [
+    "2025-08-08T19:16:07.856642+00:00",
+    [
+      {
+        "title": "Erosion Goes On For SPUU",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=83b03d11cf478f19378b367aea0d88b1b27dcb6f8fb111a3b52734bb8fc962d4"
+      }
+    ]
+  ],
+  "MVV": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T13:42:17.024560+00:00",
+          [
+            "2025-06-04T18:50:33.061562+00:00",
+            [
+              {
+                "title": "\u201c\u5171\u306b\u3064\u304f\u308b\u798f\u7949\u201d\u306e\u65b0\u305f\u306a\u62e0\u70b9\u304c\u4ed9\u53f0\u5e02\u9752\u8449\u533a\u306b\u8a95\u751f\u3078\u2015 \u5730\u57df\u4f4f\u6c11\u53c2\u52a0\u578b\u3067\u3001\u8ab0\u3082\u304c\u7acb\u3061\u5bc4\u308c\u308b\u300c\u533b\u7642\u3068\u798f\u7949\u306e\u5c45\u5834\u6240\u300d\u3065\u304f\u308a\u3092\u958b\u59cb \u2015",
+                "sentiment": "Neutral"
+              },
+              {
+                "title": "mvv-opentelemetry-instrumentation-playwright 0.1.2",
+                "sentiment": "Neutral"
+              },
+              {
+                "title": "Citadel Advisors LLC Has $670,000 Stake in ProShares Ultra MidCap 400 (NYSEARCA:MVV)",
+                "sentiment": "Neutral"
+              },
+              {
+                "title": "Tower Research Capital LLC TRC Sells 2,042 Shares of ProShares Ultra MidCap 400 (NYSEARCA:MVV)",
+                "sentiment": "Neutral"
+              },
+              {
+                "title": "Biomass Power Generation Market Opportunities and Strategies to 2034: Investment in Biomass Energy Reinforces Long-Term Sustainability Goals",
+                "sentiment": "Neutral"
+              }
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  "QQQ": [
+    "2025-08-08T19:16:05.784905+00:00",
+    [
+      {
+        "title": "Will Tariff Revenue Reduce U.S. Fiscal Risk?",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e08f61994e7e5f3de978aecbbf903efedac4ae2f2195da787e77dbcad7a7d384"
+      },
+      {
+        "title": "The Debt And Deficit Problem Isn't What You Think",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=f5e3f483c8fac53f22e9207ff0bba13b4b630761396d3f864b4cfd4c66e5d635"
+      },
+      {
+        "title": "July CPI Preview: More Evidence Of Stagflation",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e7ed3e2482c428a01b4d479d9a1b326728a511c3be61c3ccaeb44a0ca049e83d"
+      },
+      {
+        "title": "TY: Large Discount And Decent Performance From This CEF",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=5a303f28e3474ae8d3611118fb0d21073b25827ebce96becd720d1f31bef8357"
+      },
+      {
+        "title": "The Near-Perfect 7% Income Portfolio: My Blueprint For Financial Freedom",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=4a185e6f29ea5ed33928c2ed51c56ad71264029092aa5735109d3f97318dd7b5"
+      }
+    ]
+  ],
+  "XLK": [
+    "2025-08-08T19:01:13.524873+00:00",
+    [
+      {
+        "title": "Utilities Take Lead As Top U.S. Equity Sector Performer This Year",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=59741d365f5c499c01d075506366c8a9fad0490640de3ddb4161b4f8dcb7b1f5"
+      },
+      {
+        "title": "This 4 Fund Portfolio Gives You The Whole Shebang",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=05be9839eb828b69832f08d40f27c8a8f43d8f44bbb1604763782d2a4d3653b5"
+      },
+      {
+        "title": "Energy Sector Breaks; Gold Goes Sideways",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=2345aeaff919bc76a888928ece9ef308110eee9ea14e4476d2ffd9460eea682b"
+      },
+      {
+        "title": "Tech Sector Revenue Growth Has Been Accelerating Since Late '22",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=fcf0582c94cdff4404dd063c63dc3b880b65e1a22ad4d7b930080b65c6ab5f18"
+      },
+      {
+        "title": "Wall Street Lunch: Trump Threatens 250% Tariff On Pharma",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=0b1492b0ef58c690b3c1b65215f1a9a50804e71ca19ac12ac849cd9603e24307"
+      }
+    ]
+  ],
+  "BTC-USD": [
+    "2025-08-08T19:16:07.046425+00:00",
+    [
+      {
+        "title": "Solana: Mobile-First Crypto Stack Boosts Ecosystem's Adoption Opportunity",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=ecbebbe5b074234ce717e37ae9f344058b4b8463a2173ccbbb8489657a6f262a"
+      },
+      {
+        "title": "STRC: A Variable Rate Preferred Stock IPO From MicroStrategy",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=c70efcec447e37f59cf78022b3a6acd519469e02eda0eb97032c4bec5240c936"
+      },
+      {
+        "title": "Bitcoin: Price Stays Flat Midweek As Speculative Appetite Cools (Technical Analysis)",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=8715327c8204d7756d12a223d1eab8e76d16295e70bf94f077eb972379c2c67b"
+      },
+      {
+        "title": "VanEck Crypto Monthly Recap For July 2025",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=252d6bc6e9a45c83bb1abf05e9d78f07868e5f15b4217a830cb81a1e48c85df9"
+      },
+      {
+        "title": "IAUI: Make Gold Less Boring, Generate ~12.5% Cash Flow Yield",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=acce6dcaa76d21fbc9c0b31b6ca20a547da31cae4ff9a16bd746da405d3ef19f"
+      }
+    ]
+  ],
+  "MSFT": [
+    "2025-08-08T19:16:06.341132+00:00",
+    [
+      {
+        "title": "Cloud AI Today - Krutrim and Cloudera Partner to Boost AI Innovation in India",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=1813954928f0f9e4dde1f81aead0e72811ead2181fd8543ff128d01409335c82"
+      },
+      {
+        "title": "AI in beer production: is it still early days?",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=175247ae41f01600944fe0b8a562b64c1dfc4aed11e2f81f3356542ffc69ead3"
+      },
+      {
+        "title": "TY: Large Discount And Decent Performance From This CEF",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=5a303f28e3474ae8d3611118fb0d21073b25827ebce96becd720d1f31bef8357"
+      },
+      {
+        "title": "This 4 Fund Portfolio Gives You The Whole Shebang",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=05be9839eb828b69832f08d40f27c8a8f43d8f44bbb1604763782d2a4d3653b5"
+      },
+      {
+        "title": "Wall Street Breakfast Podcast: Trump Taps Miran For Short-Term Fed Position",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e04f3be85a7b453af8fa4e1670ba17ac7e09498260292802675d0373d34e1e65"
+      }
+    ]
+  ],
+  "ETH-USD": [
+    "2025-08-08T19:01:12.265972+00:00",
+    [
+      {
+        "title": "Solana: Mobile-First Crypto Stack Boosts Ecosystem's Adoption Opportunity",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=ecbebbe5b074234ce717e37ae9f344058b4b8463a2173ccbbb8489657a6f262a"
+      },
+      {
+        "title": "VanEck Crypto Monthly Recap For July 2025",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=252d6bc6e9a45c83bb1abf05e9d78f07868e5f15b4217a830cb81a1e48c85df9"
+      },
+      {
+        "title": "Crypto Bounce: Bitcoin And Ethereum Play Catch-Up To Stock Market Highs",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=58ebbfca1ddde654d89f81b07d36abf885de7c151b851289f7701fed14ef7151"
+      }
+    ]
+  ],
+  "NVDA": [
+    "2025-07-28T20:52:14.959460+00:00",
+    [
+      {
+        "title": "Huawei Unveils AI System to Challenge Nvidia's Flagship Model",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=3dc0451e1468666e512b71f1b9e9394718fb1f038daffe031992d8ba99dded50"
+      },
+      {
+        "title": "Stock Market Today: Dow Dips Even As EU Deal Boosts Boeing; Cathie Wood Loads Up On This Stock Amid 47% Plunge (Live Coverage)",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=af57981bc9b3de40a834aa0980ecae19cc6d9bc8a8739f6f421f6026600c0176"
+      },
+      {
+        "title": "S&P 500 Rally Faces $11 Trillion Gauntlet of Big Tech Earnings",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=4f47071a5b38879dbf6bfddb38632d2d71319def8fd399671eefde4e345acf83"
+      },
+      {
+        "title": "This Stock Smashes Nvidia, All Mag 7 Members \u2014 With A New Breakout Ahead",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=9b821136d4ea59145600c6f648f4e8f968ba054344562780e7afc0598cebb7f3"
+      },
+      {
+        "title": "AMD Stock Jumps as AI Chip Prices Soar Ahead of Q2 Earnings",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=f3a6641087d11748286a66419b5d14b43e162acd87fe3ed5ab65bbbfdb7b56e4"
+      }
+    ]
+  ],
+  "XBI": [
+    "2025-08-08T19:01:12.766428+00:00",
+    [
+      {
+        "title": "Erosion Goes On For SPUU",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=83b03d11cf478f19378b367aea0d88b1b27dcb6f8fb111a3b52734bb8fc962d4"
+      }
+    ]
+  ],
+  "GDX": [
+    "2025-08-08T19:16:08.396160+00:00",
+    [
+      {
+        "title": "Chart Of The Day: Metals Fans, I've Got Some Good News",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=94ba19616e778d9489d2038ec742b5963ac4b6b50ee64ddeefc423c82ff5d3c4"
+      },
+      {
+        "title": "PICK: Short Term Turbulence Offsetting Long Term Outlook",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=b93839c2ccac6a514c92ea1d661435b59fe51857ce83f3b3ef02f7b6d90f0ab4"
+      },
+      {
+        "title": "How To Invest In Natural Resources: Diversify Your Portfolio From The Ground Up",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=206cbd98ad2ee8cb0264d1a482ac5c5d6dd9352febfdb19a6c06ac6f23730d07"
+      }
+    ]
+  ],
+  "SMCI": [
+    "2025-08-08T19:16:09.207162+00:00",
+    [
+      {
+        "title": "Should You Buy Super Micro Stock After Its 20% Post-Earnings Drop? Wall Street Says This Will Happen Next.",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=6a910dce0de001d3bc873ee8af7bac8a7100e41545758c05f7bb53a49dddcc4c"
+      },
+      {
+        "title": "ARTY: A Generational Investing Theme",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=6a003a1031882685015b6344e322ec042439c01fb439ed9a756eeddb008d3a19"
+      },
+      {
+        "title": "Blaize Introduces AI Platform to Power Multi-Modal Intelligence at the Edge",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=a3cbac25f753d8435b078fa259c364d0d87a2d5892f8359f6441e25cb8cddc7d"
+      },
+      {
+        "title": "Super Micro: Buy The Fear",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=33e2022aab6164191d80273451e1cc3ad6b1574b7198cd224de7cf99713be7e9"
+      },
+      {
+        "title": "Super Micro (SMCI) Stock Is Up, What You Need To Know",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=ffd268816ae06aeff8c3a87a20ec29314d078eade73eb7fc3f8945f6fe303cad"
+      }
+    ]
+  ],
+  "KWEB": [
+    "2025-08-08T19:16:09.778164+00:00",
+    [
+      {
+        "title": "Labubus: How Pop Mart's Newest Craze Reflects Chinese Cultural Influence In The U.S.",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=a95a6bcb0ae511f1af5f14c55a762505e203edf8d323faa35eebcf0566c1c1c3"
+      },
+      {
+        "title": "Trade Update: Reciprocal Tariffs, Fragile Deals And Legal Uncertainty",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=bbd6ae2027db10657468b1b75d644d818252e0df974200c4c22a8659be07fc90"
+      },
+      {
+        "title": "World Markets Watchlist: August 4, 2025",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e324cc63451ca49792933324c327f0d5796ce89e8a98303cf12efe02b072c823"
+      },
+      {
+        "title": "U.S. Tariffs - Liberation Day 2.0, August 1",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=771e41755423632ed0b8ca7dfd194d25af11846cd50acc7c94ebeadeb482e31e"
+      },
+      {
+        "title": "Markets Weekly Outlook - U.S. Services PMI, Bank Of England Rate Decision And Canadian/NZ Employment",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=323e482af5b452ee03ec96f127fa4ea9cfcb9a3baa730247ca7afe1fe44cdbfe"
+      }
+    ]
+  ],
+  "GDXJ": [
+    "2025-08-08T19:16:10.347084+00:00",
+    [
+      {
+        "title": "How To Invest In Natural Resources: Diversify Your Portfolio From The Ground Up",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=206cbd98ad2ee8cb0264d1a482ac5c5d6dd9352febfdb19a6c06ac6f23730d07"
+      },
+      {
+        "title": "Does This Whiplash Market Signal\u00a0A Paradigm Shift In Investing?",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=53cd8107608d0e859df41ce8a5eca2e08957bc7f6a6e52de14a1c7787fca3437"
+      }
+    ]
+  ],
+  "XHB": [
+    "2025-08-08T19:16:10.990845+00:00",
+    [
+      {
+        "title": "New Homes Tantalizingly Closer To Being Affordable, But Remain Out Of Reach For Typical U.S. Household",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=941dd2455b95261e2a64430a719f3298c3433d8d7b5b801310e488be844e7969"
+      },
+      {
+        "title": "ITB: A Guide To Understanding This Homebuilders ETF",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=08c51a3a8bed53873d23063a397ccc4a615ec58d994f42aefa421509a40fa626"
+      },
+      {
+        "title": "The Coming Baby Boomer Bust",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=b3aa2202d9e13bad2c682cfd23082aa0bc4a555b231d7f3f95fff91b06cfdc97"
+      },
+      {
+        "title": "Behind The (Revised) Curve",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=6b8e9c7cbe01fdb8845292d7e099ebb099c1dfada2df6fa8f5577b9cc7ba07b4"
+      },
+      {
+        "title": "Housing Stocks Rally Despite Weak Jobs Report",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=6cac5ab34643352c2e5ae99a2768f9fa54a874c8174684857a739a3abecd67df"
+      }
+    ]
+  ],
+  "ITA": [
+    "2025-08-08T19:16:11.517844+00:00",
+    [
+      {
+        "title": "Planes, Trains And Automobiles: Can They Handle The Impact Of Tariffs?",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=d8b04072fd134e7f1f62b4bf603178ddc957dca8b5d4ed92d5f4c189683b6290"
+      }
+    ]
+  ],
+  "XLE": [
+    "2025-08-08T19:16:12.042233+00:00",
+    [
+      {
+        "title": "Utilities Take Lead As Top U.S. Equity Sector Performer This Year",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=59741d365f5c499c01d075506366c8a9fad0490640de3ddb4161b4f8dcb7b1f5"
+      },
+      {
+        "title": "This 4 Fund Portfolio Gives You The Whole Shebang",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=05be9839eb828b69832f08d40f27c8a8f43d8f44bbb1604763782d2a4d3653b5"
+      },
+      {
+        "title": "The Case For The ERX ETF Product",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=235ace5ed89b899212eeb77962f4b893f113204bbefc8c1de33cd6462af940f2"
+      },
+      {
+        "title": "Energy Sector Breaks; Gold Goes Sideways",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=2345aeaff919bc76a888928ece9ef308110eee9ea14e4476d2ffd9460eea682b"
+      },
+      {
+        "title": "SCHD: Time To Buy Before The Impending Market Rotation (Upgrade)",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=80729d5295811b67b2f075d63a20713543fcd451c9b8fdd00b9bd6f419f5eabb"
+      }
+    ]
+  ],
+  "DIA": [
+    "2025-08-08T19:16:12.537395+00:00",
+    [
+      {
+        "title": "July CPI Preview: More Evidence Of Stagflation",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e7ed3e2482c428a01b4d479d9a1b326728a511c3be61c3ccaeb44a0ca049e83d"
+      },
+      {
+        "title": "TY: Large Discount And Decent Performance From This CEF",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=5a303f28e3474ae8d3611118fb0d21073b25827ebce96becd720d1f31bef8357"
+      },
+      {
+        "title": "Window Of Weakness?",
+        "sentiment": "Negative",
+        "url": "https://finnhub.io/api/news?id=0deddec54bfe622763b040628523413ae0baabdb8d8f03888af6735e466567b8"
+      },
+      {
+        "title": "Capex Nation: Investment Themes For A Decade",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=ab5c383e40dffb0ad2687c098f0bf241931752b20b642c7cbbaac251524b79b5"
+      },
+      {
+        "title": "AAII Sentiment Survey: Pessimism Spikes",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=be0e376b4b5509b5fc6b201b0795b7e492b5ab4ca45feb07f565449e71239324"
+      }
+    ]
+  ],
+  "TLT": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T13:42:17.024564+00:00",
+          [
+            "2025-06-04T17:50:22.205467+00:00",
+            [
+              "2025-06-03T13:41:00.639869+00:00",
+              [
+                "2025-05-29T19:25:43.686224+00:00",
+                [
+                  "2025-05-29T13:59:48.431168+00:00",
+                  [
+                    "2025-05-29T12:45:12.182342+00:00",
+                    [
+                      {
+                        "title": "PCE Report Preview: TLT, Sector ETFs in Focus",
+                        "sentiment": "Neutral",
+                        "url": "https://consent.yahoo.com/v2/collectConsent?sessionId=1_cc-session_3568e52f-95ed-4af2-ad38-511fa511e0a0"
+                      },
+                      {
+                        "title": "\u2018Widow Maker\u2019 Bond-ETF Trade Delivers Fast Gains for Dip-Buyers",
+                        "sentiment": "Neutral",
+                        "url": "https://finance.yahoo.com/news/widow-maker-bond-etf-trade-181113850.html"
+                      },
+                      {
+                        "title": "TLT Attracts $637M as Trade Tensions Calm Down",
+                        "sentiment": "Neutral",
+                        "url": "https://consent.yahoo.com/v2/collectConsent?sessionId=1_cc-session_8f193fd0-44eb-4394-a1a4-51e6d9276ff8"
+                      },
+                      {
+                        "title": "King Dollar Falls, Bitcoin Marches Toward Sound Money Highs",
+                        "sentiment": "Neutral",
+                        "url": "https://www.coindesk.com/markets/2025/05/22/king-dollar-falls-bitcoin-marches-toward-sound-money-highs"
+                      },
+                      {
+                        "title": "TLT Slips as Stock ETFs Shrug Off Moody\u2019s Downgrade",
+                        "sentiment": "Neutral",
+                        "url": "https://consent.yahoo.com/v2/collectConsent?sessionId=1_cc-session_c678211e-9688-436e-a9dc-c8178b7708e8"
+                      }
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  "UNG": [
+    "2025-08-08T19:16:13.120928+00:00",
+    [
+      {
+        "title": "Natural Gas Holds Near $3.10 As Triangle Consolidation And EU Oversupply Limit Upside (Technical Analysis)",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=eded2834e7ab47b7061bf926563ccb9d673b7a4077c54d1047336422448b06be"
+      },
+      {
+        "title": "U.S. May Oil Production Hits New High Again",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=eb1bbbb11dba8099d28c2b2e9dce495ffce91969235ffb03f77ec1e65b192f53"
+      },
+      {
+        "title": "Natural Gas Steadies Near $3 As U.S. Futures Weaken Despite Europe's Supply Risks",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=fbadb4fcbbb1c9c03bd33aca3b5e07ca707cb4336a8a5840522abdcaee4f12a0"
+      }
+    ]
+  ],
+  "MDY": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T13:42:17.024564+00:00",
+          [
+            "2025-06-04T17:50:22.205468+00:00",
+            [
+              "2025-06-03T13:41:00.639870+00:00",
+              [
+                "2025-05-29T19:25:43.686224+00:00",
+                [
+                  "2025-05-29T13:59:52.785312+00:00",
+                  [
+                    {
+                      "title": "Louis Moore Bacon's Strategic Moves: A Significant Reduction in NVIDIA Corp",
+                      "sentiment": "Neutral",
+                      "url": "https://finance.yahoo.com/news/louis-moore-bacons-strategic-moves-190222820.html"
+                    },
+                    {
+                      "title": "Xiaomi Pad 7 Ultra: a 14\u201d beast that can charge at 120W",
+                      "sentiment": "Neutral",
+                      "url": "https://www.gizchina.com/2025/05/12/xiaomi-pad-7-ultra-a-14-beast-that-can-charge-at-120w/"
+                    },
+                    {
+                      "title": "Price T Rowe Associates Inc. MD Buys 3,235 Shares of SPDR S&P MidCap 400 ETF Trust (NYSEARCA:MDY)",
+                      "sentiment": "Neutral",
+                      "url": "https://www.etfdailynews.com/2025/05/07/price-t-rowe-associates-inc-md-buys-3235-shares-of-spdr-sp-midcap-400-etf-trust-nysearcamdy/"
+                    }
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  "SILVER": [
+    "2025-08-08T19:16:07.856642+00:00",
+    []
+  ],
+  "TSLT": [
+    "2025-08-08T19:16:13.927075+00:00",
+    []
+  ],
+  "PLTR": [
+    "2025-06-18T15:19:27.329814+00:00",
+    [
+      "2025-06-18T13:00:14.329677+00:00",
+      [
+        "2025-06-15T20:25:09.437349+00:00",
+        [
+          "2025-06-06T13:42:17.024565+00:00",
+          [
+            "2025-06-04T17:50:22.205471+00:00",
+            [
+              "2025-06-03T13:41:01.163510+00:00",
+              [
+                {
+                  "title": "A Google stock panic, Microsoft vs. Amazon, and Jamie Dimon on tariffs: Markets news roundup",
+                  "sentiment": "Positive",
+                  "url": "https://qz.com/apple-google-stock-microsoft-amazon-jamie-dimon-tariffs-1851779975"
+                },
+                {
+                  "title": "Palantir\u2019s AI boom isn\u2019t enough for Wall Street",
+                  "sentiment": "Neutral",
+                  "url": "https://qz.com/pltr-nasdaq-may-6-earnings-1851779339"
+                },
+                {
+                  "title": "Bull and Bear Clash on Palantir Technologies (PLTR) Stock",
+                  "sentiment": "Negative",
+                  "url": "https://biztoc.com/x/d836658810796c58"
+                },
+                {
+                  "title": "Palantir Technologies Inc. (PLTR): A Bull Case Theory",
+                  "sentiment": "Neutral",
+                  "url": "https://finance.yahoo.com/news/palantir-technologies-inc-pltr-bull-194115647.html"
+                },
+                {
+                  "title": "PLTR Results \u201cfor the Most Part Were Really Good,\u201d Schwab Correspondent Says",
+                  "sentiment": "Neutral",
+                  "url": "https://finance.yahoo.com/news/pltr-results-most-part-were-131916323.html"
+                }
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ],
+  "AMD": [
+    "2025-08-08T19:01:11.909736+00:00",
+    [
+      {
+        "title": "Tesla Dojo Supercomputer Is No More As Elon Musk Shifts Chips Strategy",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=47dbf1c85c8277eed789dbc3ac64fcc764d70fb8ef75252ed98acf9eafb496db"
+      },
+      {
+        "title": "Tesla disbanding Dojo supercomputer efforts is positive for these 2 chip stocks",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=85721817b7e6d07c8258a78ffdedceaf271cd74c85ecaf2df429afa48fa276ce"
+      },
+      {
+        "title": "Earnings live: SoundHound AI stock soars, The Trade Desk gets pummeled, Wendy's lowers profit forecast",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=a523a2177f5087f32f67483f375acfa272ac3a2e883355542abc3c6ef9259308"
+      },
+      {
+        "title": "This Week In AI Chips - DEEPX Baidu Partnership Advances Global AI Integration",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=b0800ff1f9dcf5b3278c5b148ab326edb385a05d11ed32c7307a739a15870ea7"
+      },
+      {
+        "title": "Nvidia Stock Set for New Highs. Thank OpenAI and Tesla.",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=67a59bb93d9fd7e2e2f9474c8249b1935c73c4c876db59829b94d23d757ed540"
+      }
+    ]
+  ],
+  "SSO": [
+    "2025-08-08T19:16:14.155909+00:00",
+    [
+      {
+        "title": "Will Tariff Revenue Reduce U.S. Fiscal Risk?",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=e08f61994e7e5f3de978aecbbf903efedac4ae2f2195da787e77dbcad7a7d384"
+      },
+      {
+        "title": "The Debt And Deficit Problem Isn't What You Think",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=f5e3f483c8fac53f22e9207ff0bba13b4b630761396d3f864b4cfd4c66e5d635"
+      },
+      {
+        "title": "Bull-Bear Spread Tips Negative",
+        "sentiment": "Negative",
+        "url": "https://finnhub.io/api/news?id=bd0527ed2246fbe75f68a3e195f7fff6f038fe66837c025096d1cf48ba276036"
+      },
+      {
+        "title": "ISM Services PMI Barely Hangs On To Expansion",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=57cde547355c56167bea2b15eb4c122d3eb234488efc28549598db10ee07b591"
+      },
+      {
+        "title": "Initial Unemployment Claims Up 7K, Higher Than Expected",
+        "sentiment": "Positive",
+        "url": "https://finnhub.io/api/news?id=d76ec57dd52b6c1f312bd24ace46297584a75acb3ecb15d13b0a3fc26be190aa"
+      }
+    ]
+  ],
+  "SDS": [
+    "2025-08-08T19:16:14.440869+00:00",
+    [
+      {
+        "title": "Recession Talk Is Back, But Confirming Data Still Missing",
+        "sentiment": "Negative",
+        "url": "https://finnhub.io/api/news?id=9d611f6ee06bf277fd91567e579308ab0e909dc9b990335498cb0168b275844d"
+      },
+      {
+        "title": "Bull Streak Ends As August Begins",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=93ae32cf100d4bfda3565f69c7a6122f888f9b8782acfb755874ef5aaa7487e6"
+      },
+      {
+        "title": "Weekly Market Pulse: A River In Egypt",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=31c3fdcedd569b9e03f01a8e9b7fd8011ce827bc9c4adcf2e453ef805f37ea0d"
+      },
+      {
+        "title": "Erosion Goes On For SPUU",
+        "sentiment": "Neutral",
+        "url": "https://finnhub.io/api/news?id=83b03d11cf478f19378b367aea0d88b1b27dcb6f8fb111a3b52734bb8fc962d4"
+      }
+    ]
+  ],
+  "NVDL": [
+    "2025-08-08T19:01:13.272852+00:00",
+    []
+  ]
+}

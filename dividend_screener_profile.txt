@@ -1,0 +1,101 @@
+Main app name: screen_dividends.py
+supporting app: yahoo_scraper.py # Scrapes Yahoo for data not found from FMP
+
+🗃️ Key Files and Their Roles
+| File | Role | 
+| scored_my_holdings.csv | Your personal portfolio dataset, merged and updated | 
+| scored_candidates.csv | Broader screening results (e.g. TOS) | 
+| dividend_stocks.xlsx | Source list of tickers for your personal portfolio | 
+| div_continuity_model.joblib | ML model used to calculate "Continuation Prob (%)" | 
+| thinkorswim_leftovers.json | Stores unprocessed tickers from prior runs | 
+| OUTPUT_CSV | Cached result of full dividend screen | 
+| (coming soon) watchlist_evaluator.py | Evaluates adds/drops to candidate universe dynamically | 
+
+🔄 Current Update/Refresh Cycles
+| Component | Refresh Frequency | Logic | 
+| Personal portfolio | Up to every 90 days, per ticker | Rescreened only if "Last Updated" is older than 90 days | 
+| scored_candidates.csv | Daily or as needed | Rescored when run_screen() pulls fresh tickers | 
+| GUI Display | Always launches from latest CSV | Includes visual fixes (e.g. remapped "Est. Frequency") | 
+| Model | Static unless retrained manually | Doesn't learn continuously—new training must be triggered | 
+| Manual Updates | Preserved across sessions | Marked with "Source": "Manual" and protected from overwrites | 
+
+
+📦 Current App Overview: What It Does
+Your dividend screening and scoring app is a robust, self-updating toolkit that:
+- Screens dividend-paying stocks from both a personal portfolio (via Excel) and broader market candidates (via Think or Swim or other API)
+- Builds feature vectors per ticker using fundamentals like:
+- EPS, Payout Ratio, Beta, Dividend History (yrs), 5Y Growth Rate, Debt/Equity, and Yield
+- Scores tickers using a machine learning model to estimate "Continuation Prob (%)"
+- Launches GUI dashboards to interactively review, edit, and preserve manual insights
+- Preserves manual inputs, color-codes data by source, and tracks "Last Updated" for every row
+- Supports rescoring and model training (on demand or batch)
+
+🛠️ In Progress / Upcoming Features
+🧠 Intelligent Ticker Evolution (watchlist_evaluator.py)
+- Identifies candidates to add based on strong continuation and yield
+- Flags tickers to remove if scores drop or distributions stall
+- Uses thresholds like:
+- ADD_THRESH = 85
+- REMOVE_THRESH = 60
+- STALE_MONTHS = 3
+📈 Time-Sensitive Refresh Logic
+- Replacing "90-day" flat rule with conditional re-screening, e.g.:
+- Refresh every 2–3 days for high-yield / risky tickers
+- Respect manual edits unless overwritten by better data
+- Smart merge updates only when values change meaningfully
+🧪 Model Retraining (Proposed)
+- Periodically scans labeled data (Label == 1 or 0) in scored_candidates.csv
+- Trains updated model to incorporate real-world dividend behavior
+- Version-controlled .joblib files allow rollback if needed
+🕵️ Dividend Continuity Tracker (Optional)
+- Longitudinal log of predictions vs. real outcomes
+- Identifies whether the model over- or under-predicts for specific sectors
+
+New enhancements overview:
+✅ 1. Track Continuation Performance Over Time
+Build a side file (say, continuation_history.csv) where you log:
+- Ticker
+- Date
+- Continuation Prob (%)
+- Actual dividend paid that cycle (if available)
+- Source
+This gives you a rolling scorecard of how well your predictions align with reality. From there, you can start seeing who's consistently under- or over-delivering.
+
+
+✅ 2. Build a “Watchlist Decay” Model
+If a ticker hasn’t had a payout or update in N periods (say, 3 months), and:
+- Its continuation probability is below a threshold (e.g. 60%)
+- Or yield has dropped materially
+Then flag it for removal from the Think or Swim (TOS) pool.
+Example logic:
+
+if prob < 60 and months_since_last_div >= 3:
+    action = "Remove from screen"
+
+
+
+✅ 3. Elevate New Candidates into the List
+From your full-screen run, look for new names that:
+- Have a continuation prob above 85%
+- Meet your yield and payout criteria
+- Have at least 12 months of div history
+Add them to the TOS seed file automatically and mark "Source" = "Candidate"
+You’re evolving the list based on evidence, not just hope.
+
+
+✅ 4. Run a Summary Report After Each Full Screen
+At the end of each run_screen() cycle:
+- Print or export a report with 3 sections:
+- 🔺 Add these (new strong candidates)
+- ⚠️ Review these (high risk or inconsistent)
+- ❌ Remove these (no longer paying or big drop in score)
+
+
+🛠️ Updated Roadmap for screen_dividends App Enhancements
+✅ What’s Already in Place
+- Robust caching mechanism to preserve API quota
+- Feature vector logic to capture key dividend attributes
+- Diagnostic tools for missing features and data completeness
+- Support for basic ticker screening and yield estimation
+- Initial ticker list sorted into "owned" vs "partial pull" based on availability and API coverage
+

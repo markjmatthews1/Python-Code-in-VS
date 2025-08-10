@@ -1,0 +1,70 @@
+AI Leveraged ETF Ranker – Project Outline
+Goal
+*	Predict and rank the top 5 leveraged ETFs (and optionally stocks) likely to perform best for the 
+current or next day.
+*	Display these in the day.py dashboard with their rank and relevant data.
+*	Make the system flexible for both short-term and longer-term gain predictions.
+ 
+Data Requirements
+a. Historical Price Data
+*	Daily OHLCV (Open, High, Low, Close, Volume) for leveraged ETFs and optionally stocks.
+*	At least 1–2 years of history for robust modeling.
+b. ETF/Stock List
+*	List of leveraged ETFs (e.g., TQQQ, SQQQ, SOXL, LABU, SPXL, etc.).
+*	Optionally, a broader list for longer-term stock/ETF picks.
+c. Market/News/Indicator Data (Optional, for better accuracy)
+*	Technical indicators (RSI, MACD, moving averages, etc.).
+*	Market sentiment/news (optional, advanced).
+*	Economic calendar/events (optional).
+d. Data Sources
+*	Yahoo Finance (yfinance Python package)
+*	Alpha Vantage, IEX Cloud, or other APIs (for more/different data)
+*	Your own trade history (optional, for personalization)
+ 
+AI/ML Model Design
+a. Feature Engineering
+*	Calculate technical indicators from price data.
+*	Create features for recent returns, volatility, volume spikes, etc.
+b. Model Selection
+*	Start with regression (predict next-day % return) or classification (up/down).
+*	Use scikit-learn (RandomForest, XGBoost, etc.) for prototyping.
+*	Optionally, try deep learning (LSTM, etc.) for advanced modeling.
+c. Training & Validation
+*	Train on historical data, validate on recent unseen data.
+*	Save the trained model for fast inference.
+ 
+Prediction & Ranking
+*	For each ETF/stock, predict next-day (or short-term) return.
+*	Rank all candidates by predicted return or probability of gain.
+*	Select the top 5 leveraged ETFs (or stocks) for display.
+ 
+Integration with day.py Dashboard
+a. API/Interface
+*	The AI module should expose a function (e.g., get_top_etf_ranks()) that returns a list of top 5 tickers 
+with their predicted rank/score.
+b. Display
+*	day.py imports and calls the AI module, then displays the results in the dashboard.
+ 
+Flexibility for Longer-Term Picks
+*	Allow the module to switch between short-term (1-day) and longer-term (e.g., 1-week, 1-month) 
+prediction modes.
+*	Parameterize the prediction horizon.
+ 
+Extensibility
+*	Easy to add new ETFs, stocks, or features.
+*	Optionally, allow user feedback to improve recommendations.
+ 
+Files/Modules to Build
+*	ai_ranker.py – The main AI/ML module for data fetching, feature engineering, prediction, and 
+ranking.
+*	day.py – Your dashboard app, which will import and use ai_ranker.py.
+*	requirements.txt – List of required Python packages (yfinance, scikit-learn, pandas, etc.).
+ 
+Summary of Steps
+1.	Gather and clean historical data for leveraged ETFs.
+2.	Engineer features and build/train a predictive model.
+3.	Save the model and create a function to rank ETFs daily.
+4.	Integrate the ranking function into your dashboard.
+5.	(Optional) Expand to longer-term picks and more asset types.
+ 
+

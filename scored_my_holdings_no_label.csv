@@ -1,0 +1,20 @@
+Ticker,Avg Div Interval,Est. Frequency,Yield Est (%),EPS,Payout Ratio,Beta,Div History (yrs),5Y Growth Rate (%),Debt/Equity,Sector,Industry,Source,Continuation Prob (%),Last Updated
+ABR,107.4,Quarterly,8.26,1.29,1.49,1.29,20.9,-11.04,318.89,Real Estate,REIT - Mortgage,Manual,100.0,2025-07-05
+ACP,30.5,Monthly,15.63,1.27,1.08,0.86,14.2,-3.58,27.91,Financial Services,Asset Management,FMP,100.0,2025-07-06
+AGNC,40.3,Monthly,11.5,1.1,1.44,1.28,17.0,-5.43,659.93,Real Estate,REIT - Mortgage,Manual,100.0,2025-07-05
+BRSP,62.1,Quarterly,18.22,-1.04,-0.75,1.56,7.3,1.36,229.65,Real Estate,REIT - Mortgage,Manual,100.0,2025-07-05
+ECC,34.0,Monthly,19.82,0.86,1.97,0.43,10.7,-12.0,37.97,Financial Services,Asset Management,Manual,100.0,2025-07-05
+OFS,92.6,Quarterly,16.09,2.12,0.64,1.38,12.4,5.75,153.76,Financial Services,Asset Management,FMP,100.0,2025-07-06
+TRMD,201.9,Semi-Annually,4.62,6.36,0.9,-0.05,7.7,47.56,55.19,Energy,Oil & Gas Midstream,FMP,100.0,2025-07-06
+BITO,,Monthly,44.22,0.0,0.0,0.85,3.7,0.0,0.0,,,Manual,94.4,2025-07-05
+CHMI,91.4,Quarterly,21.13,0.0,2.35,1.08,11.5,-9.11,523.61,Real Estate,REIT - Mortgage,FMP,100.0,2025-07-04
+DSL,30.4,Monthly,10.77,1.09,0.5,0.755,12.0,-2.55,0.0,Financial Services,Asset Management,FMP,46.3,2025-07-04
+DX,68.6,Monthly,6.64,0.79,1.03,0.92,37.0,-3.35,518.55,Real Estate,REIT - Mortgage,Manual,100.0,2025-07-05
+EIC,30.0,Monthly,11.3,2.81,0.83,0.19,6.1,-2.81,40.25,Financial Services,Asset Management,FMP,100.0,2025-07-04
+MORT,,Quarterly,29.46,1.09,183.0,0.73,12.0,0.6,0.0,,,ETRADE,100.0,2025-07-04
+NHS,30.3,Monthly,14.33,0.84,0.76,0.77,21.8,-1.9,41.01,Financial Services,Asset Management,FMP,100.0,2025-07-04
+PDI,29.3,Monthly,13.85,1.96,1.08,0.61,12.9,1.72,0.0,Financial Services,Asset Management,FMP,69.3,2025-07-04
+QDTE,,Weekly,7.75,1.09,0.0,0.98,1.3,0.0,0.0,,,ETRADE,48.3,2025-07-04
+QYLD,,Monthly,11.87,0.51,445.6,0.9,11.5,-0.76,0.0,,,ETRADE,100.0,2025-07-04
+RYLD,,Monthly,11.88,0.94,203.0,0.78,6.25,0.61,0.0,,,ETRADE,100.0,2025-07-04
+SVOL,,Monthly,18.68,0.69,0.0,1.91,4.0,1.07,0.0,,,ETRADE,81.3,2025-07-04
