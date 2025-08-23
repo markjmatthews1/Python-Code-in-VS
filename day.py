@@ -1,3 +1,95 @@
+# --- Streaming handler minute aggregation trigger ---
+last_aggregated_minute = None
+
+def streaming_minute_watcher():
+    import pandas as pd
+    global last_aggregated_minute, historical_data, all_candidate_tickers
+    
+    # ⚡ CRITICAL FIX: Only run streaming operations during regular market hours (9:30 AM - 4:00 PM ET)
+    # Use comprehensive market status check that includes holidays
+    market_is_open, market_status, market_explanation = get_market_status_detailed()
+    
+    # Check if we're in regular trading hours (not pre/post market, not weekends, not holidays)
+    from datetime import datetime
+    import pytz
+    now = datetime.now(pytz.timezone("US/Eastern"))
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    # Weekend check
+    if weekday >= 5:  # Saturday or Sunday
+        print(f"[STREAMING] 🛑 Weekend ({now.strftime('%A')}) - streaming disabled")
+        return
+    
+    # Holiday check - if market status shows closed due to holiday
+    if not market_is_open and "Holiday" in market_status:
+        print(f"[STREAMING] 🛑 Market Holiday ({now.strftime('%B %d, %Y')}) - streaming disabled")
+        return
+        
+    # Regular market hours check (9:30 AM to 4:00 PM ET on weekdays)
+    is_regular_hours = (
+        weekday < 5 and  # Monday-Friday
+        ((current_hour == 9 and current_minute >= 30) or  # 9:30 AM or later
+         (current_hour > 9 and current_hour < 16) or      # 10 AM - 3:59 PM
+         (current_hour == 16 and current_minute == 0))    # Exactly 4:00 PM
+    )
+    
+    if not is_regular_hours:
+        print(f"[STREAMING] 🛑 Outside regular trading hours ({now.strftime('%I:%M %p %A')}) - streaming disabled")
+        print(f"[STREAMING] Regular hours: Monday-Friday 9:30 AM - 4:00 PM ET (holidays excluded)")
+        return
+    
+    now_minute = pd.Timestamp.now().floor("min")
+    print(f"[STREAMING] ✅ Regular trading hours - processing minute {now_minute}")
+    
+    if last_aggregated_minute is None:
+        last_aggregated_minute = now_minute
+        return
+    if now_minute > last_aggregated_minute:
+        # Aggregate the just-completed minute
+        minute_to_aggregate = last_aggregated_minute
+        print(f"[STREAMING] Aggregating and saving completed minute: {minute_to_aggregate}")
+        historical_data = append_latest_streaming_to_historical(historical_data, all_candidate_tickers, minute_to_aggregate)
+        last_aggregated_minute = now_minute
+
+# --- Aggregate and append latest streaming minute to historical data ---
+def append_latest_streaming_to_historical(historical_data, tickers, minute_to_aggregate=None):
+    global ohlcv_buffer
+    import pandas as pd
+    new_rows = []
+    if minute_to_aggregate is None:
+        minute_to_aggregate = pd.Timestamp.now().floor("min") - pd.Timedelta(minutes=1)
+    print(f"[DEBUG] Attempting to aggregate streaming data for minute: {minute_to_aggregate}")
+    for ticker in tickers:
+        if ticker in ohlcv_buffer:
+            if minute_to_aggregate in ohlcv_buffer[ticker]:
+                print(f"[DEBUG] Aggregating {ticker} for {minute_to_aggregate}, {len(ohlcv_buffer[ticker][minute_to_aggregate])} ticks in buffer.")
+                agg = aggregate_ohlcv_for_minute(ticker, minute_to_aggregate)
+                print(f"[DEBUG] Aggregated row for {ticker}: {agg}")
+                new_rows.append(agg)
+            else:
+                print(f"[DEBUG] No data in ohlcv_buffer for {ticker} at {minute_to_aggregate}.")
+        else:
+            print(f"[DEBUG] {ticker} not present in ohlcv_buffer.")
+    if new_rows:
+        print(f"[STREAMING] Appending {len(new_rows)} streaming minute(s) to historical data for {minute_to_aggregate}.")
+        df_new = pd.DataFrame(new_rows)
+        print(f"[DEBUG] DataFrame to append:\n{df_new}")
+        before_rows = len(historical_data)
+        historical_data = pd.concat([historical_data, df_new], ignore_index=True)
+        after_concat_rows = len(historical_data)
+        historical_data = historical_data.drop_duplicates(subset=["Datetime", "Ticker"], keep="last")
+        after_dropdup_rows = len(historical_data)
+        print(f"[DEBUG] Rows before append: {before_rows}, after concat: {after_concat_rows}, after drop_duplicates: {after_dropdup_rows}")
+        
+        # ✅ Force save to CSV file immediately
+        print(f"[STREAMING] 💾 Saving updated historical data to CSV...")
+        save_historical_data(historical_data)
+        print(f"[STREAMING] ✅ Streaming data saved successfully!")
+    else:
+        print(f"[STREAMING] No new streaming minute to append for {minute_to_aggregate}.")
+    return historical_data
 # =========================
 # Standard Library Imports
 # =========================
@@ -85,7 +177,7 @@ from IPython.display import Audio, display, HTML, clear_output
 import tkinter as tk
 from tkinter import simpledialog
 
-# --- Splash Popup will be created later when data processing starts ---
+# --- Splash Popup will be created at the very start of execution ---
 
 # =========================
 # Local/Other Imports
@@ -142,6 +234,61 @@ WHALE_CACHE_FILE = "whale_cache.json"
 
 
                                                              # ***** End of global variables *****
+
+def get_market_status_detailed():
+    """
+    Returns detailed market status including weekends and holidays.
+    Returns: (is_open, status_message, explanation)
+    """
+    from datetime import datetime
+    import pytz
+    
+    # US market holidays (static for 2025)
+    us_market_holidays_2025 = set([
+        datetime(2025, 1, 1).date(),   # New Year's Day
+        datetime(2025, 1, 20).date(),  # Martin Luther King Jr. Day
+        datetime(2025, 2, 17).date(),  # Presidents' Day
+        datetime(2025, 4, 18).date(),  # Good Friday
+        datetime(2025, 5, 26).date(),  # Memorial Day
+        datetime(2025, 6, 19).date(),  # Juneteenth
+        datetime(2025, 7, 4).date(),   # Independence Day
+        datetime(2025, 9, 1).date(),   # Labor Day
+        datetime(2025, 11, 27).date(), # Thanksgiving
+        datetime(2025, 12, 25).date(), # Christmas
+    ])
+    
+    now = datetime.now(pytz.timezone("US/Eastern"))
+    today_date = now.date()
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    
+    # Check if today is a weekend
+    if weekday >= 5:  # Saturday or Sunday
+        day_name = now.strftime('%A')
+        return False, f"Market is CLOSED ({day_name})", f"Weekend - Markets closed on {day_name}"
+    
+    # Check if today is a holiday
+    if today_date in us_market_holidays_2025:
+        return False, f"Market is CLOSED (Holiday)", f"US Market Holiday - {now.strftime('%B %d, %Y')}"
+    
+    # Check trading hours (4 AM to 8 PM ET)
+    market_open = now.replace(hour=4, minute=0, second=0, microsecond=0)
+    market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    
+    if now < market_open:
+        return False, f"Market is CLOSED (Pre-market)", f"Market opens at 4:00 AM ET (in {market_open - now})"
+    elif now > market_close:
+        return False, f"Market is CLOSED (After-hours)", f"Market closed at 8:00 PM ET"
+    else:
+        # Market is open - determine which session
+        regular_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        regular_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+        
+        if now < regular_open:
+            return True, f"Market is OPEN (Pre-market)", f"Pre-market session: 4:00-9:30 AM ET"
+        elif now <= regular_close:
+            return True, f"Market is OPEN (Regular)", f"Regular session: 9:30 AM-4:00 PM ET"
+        else:
+            return True, f"Market is OPEN (After-hours)", f"After-hours session: 4:00-8:00 PM ET"
 
                                                              # ***** Begin ETF mapping setup *****
 
@@ -225,6 +372,72 @@ def load_settings():
 def get_volatility_lookback_bars():
     settings = load_settings()
     return settings.get("volatility_lookback_bars", 12)
+
+def clean_historical_data_duplicates(filename="historical_data.csv"):
+    """
+    Clean up duplicate entries in historical data CSV caused by inconsistent datetime formatting.
+    This removes entries that have both '2025-08-22 12:42' and '2025-08-22 12:42:00' formats.
+    Also removes malformed entries that are missing datetime values.
+    """
+    print("🧹 [CLEANUP] Cleaning historical data duplicates caused by datetime formatting...")
+    
+    if not os.path.exists(filename):
+        print(f"❌ [CLEANUP] File {filename} does not exist")
+        return None
+        
+    try:
+        # Read the CSV file
+        df = pd.read_csv(filename)
+        original_rows = len(df)
+        print(f"🔍 [CLEANUP] Original data: {original_rows} rows")
+        
+        # Ensure Datetime column exists
+        if 'Datetime' not in df.columns:
+            print("❌ [CLEANUP] No Datetime column found")
+            return None
+        
+        # First, remove malformed entries that have empty/null datetime values
+        before_malformed = len(df)
+        df = df[df['Datetime'].notna() & (df['Datetime'].astype(str).str.strip() != '')]
+        after_malformed = len(df)
+        malformed_removed = before_malformed - after_malformed
+        if malformed_removed > 0:
+            print(f"🗑️ [CLEANUP] Removed {malformed_removed} malformed entries (missing datetime)")
+            
+        # Convert to datetime and ensure consistent formatting
+        df['Datetime'] = pd.to_datetime(df['Datetime'], errors='coerce')
+        
+        # Remove any rows where datetime conversion failed
+        df = df.dropna(subset=['Datetime'])
+        
+        # Format consistently without seconds
+        df['Datetime'] = df['Datetime'].dt.strftime('%Y-%m-%d %H:%M')
+        
+        # Remove duplicates based on Datetime and Ticker, keeping the last entry
+        before_dedup = len(df)
+        df = df.drop_duplicates(subset=['Datetime', 'Ticker'], keep='last')
+        after_dedup = len(df)
+        
+        duplicates_removed = before_dedup - after_dedup
+        print(f"🗑️ [CLEANUP] Removed {duplicates_removed} duplicate entries")
+        
+        # Sort by Ticker and Datetime for consistency
+        df = df.sort_values(by=['Ticker', 'Datetime'])
+        
+        # Save the cleaned data back
+        df.to_csv(filename, index=False)
+        total_removed = original_rows - len(df)
+        print(f"✅ [CLEANUP] Saved cleaned data: {len(df)} rows (was {original_rows})")
+        print(f"📊 [CLEANUP] Total entries removed: {total_removed} ({malformed_removed} malformed + {duplicates_removed} duplicates)")
+        print(f"💾 [CLEANUP] File: {os.path.abspath(filename)}")
+        
+        return df
+        
+    except Exception as e:
+        print(f"❌ [CLEANUP] Error cleaning historical data: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 
@@ -351,18 +564,16 @@ def validate_datetime_data(df):
     
     print("🔍 Validating datetime data...")
     
-    # 🔥 NEW: Handle multiple datetime formats robustly
+    # 🔥 FIXED: Ensure consistent datetime formatting without seconds
     if 'Datetime' in df.columns:
         # Clean up any malformed datetime strings first
         df['Datetime'] = df['Datetime'].astype(str)
         
         # Remove any trailing artifacts or extra spaces
-        df['Datetime'] = df['Datetime'].str.replace(r':00$', '', regex=True)
         df['Datetime'] = df['Datetime'].str.replace(r'\s+', ' ', regex=True)
         
         # Try multiple parsing approaches
         try:
-
             # First try: errors='coerce' to preserve data
             df['Datetime'] = pd.to_datetime(df['Datetime'], errors='coerce')
             print("✅ Parsed datetime with errors='coerce'")
@@ -375,6 +586,11 @@ def validate_datetime_data(df):
                 # Last resort: force conversion
                 print("⚠️ Using force conversion")
                 df['Datetime'] = pd.to_datetime(df['Datetime'], errors='coerce')
+        
+        # **CRITICAL FIX**: Ensure ALL datetimes are formatted consistently without seconds
+        # This prevents the duplicate entries with mixed :00 and no-seconds formats
+        df['Datetime'] = df['Datetime'].dt.strftime('%Y-%m-%d %H:%M')
+        df['Datetime'] = pd.to_datetime(df['Datetime'], format='%Y-%m-%d %H:%M')
     
     # Count and report issues
     nat_count = df['Datetime'].isna().sum()
@@ -455,6 +671,37 @@ def get_top_etf_list_from_excel():
 all_candidate_tickers = get_top_etf_list_from_excel()
 print(f"🎯 Starting with {len(all_candidate_tickers)} candidate tickers for ranking")
 
+# --- Create Splash Popup at the very start of app execution ---
+_day_splash = tk.Tk()
+_day_splash.title("Loading Day Trading Dashboard...")
+_day_splash.geometry("420x130")
+_day_splash.configure(bg="#ffe066")  # Vibrant yellow background
+_day_splash.attributes("-topmost", True)  # Always on top
+_day_splash_label = tk.Label(
+    _day_splash,
+    text="Day Trading Dashboard is starting...\nPlease wait...",
+    font=("Segoe UI", 17, "bold"),
+    fg="#0a2463",  # Deep blue text for high contrast
+    bg="#ffe066",
+    pady=32
+)
+_day_splash_label.pack(expand=True, fill="both")
+_day_splash.update()
+
+# --- Play startup audio notification ---
+try:
+    print("🔊 Playing startup audio notification...")
+    # Inline audio playback for startup (avoiding function dependency)
+    audio_file_path = f"C:/Users/mjmat/Pythons_Code_Files/day_app_starting.mp3"
+    if os.path.exists(audio_file_path):
+        data, samplerate = sf.read(audio_file_path)
+        sd.play(data, samplerate)
+        print("✅ Startup audio played successfully")
+    else:
+        print(f"⚠️ Audio file not found: {audio_file_path}")
+except Exception as e:
+    print(f"⚠️ Could not play startup audio: {e}")
+
 # ====== Historical Data Loader ======
 HISTORICAL_DATA_FILE = "historical_data.csv"
 
@@ -468,6 +715,30 @@ def is_file_fresh(filepath, min_rows=10):
         return False
 
 def append_missing_schwab_data(historical_file, tickers, max_ticks=500):
+    from datetime import datetime
+    # US market holidays (static for 2025, can be expanded or made dynamic)
+    us_market_holidays_2025 = set([
+        # New Year's Day
+        datetime(2025, 1, 1).date(),
+        # Martin Luther King Jr. Day
+        datetime(2025, 1, 20).date(),
+        # Presidents' Day
+        datetime(2025, 2, 17).date(),
+        # Good Friday
+        datetime(2025, 4, 18).date(),
+        # Memorial Day
+        datetime(2025, 5, 26).date(),
+        # Juneteenth National Independence Day
+        datetime(2025, 6, 19).date(),
+        # Independence Day (observed)
+        datetime(2025, 7, 4).date(),
+        # Labor Day
+        datetime(2025, 9, 1).date(),
+        # Thanksgiving Day
+        datetime(2025, 11, 27).date(),
+        # Christmas Day
+        datetime(2025, 12, 25).date(),
+    ])
     from datetime import datetime, timedelta
     from schwab_data import fetch_minute_bars_for_range, fetch_schwab_minute_ohlcv
     
@@ -485,65 +756,76 @@ def append_missing_schwab_data(historical_file, tickers, max_ticks=500):
     all_new_data = []
     today = datetime.now().date()
     
+    import pytz
+    eastern = pytz.timezone("US/Eastern")
     for ticker in tickers:
         print(f"Processing {ticker}...")
-        
-        if not hist_df.empty and ticker in hist_df["Ticker"].unique():
-            ticker_data = hist_df[hist_df["Ticker"] == ticker].copy()
-            last_dt = ticker_data["Datetime"].max()
-            print(f"  Last data for {ticker}: {last_dt}")
-            
-            # Check if we have today's data
+        ticker_data = hist_df[hist_df["Ticker"] == ticker].copy() if not hist_df.empty and ticker in hist_df["Ticker"].unique() else pd.DataFrame()
+        # Build set of all days from earliest in data (or 5 days ago) to today
+        if not ticker_data.empty:
             ticker_data.loc[:, 'Date'] = pd.to_datetime(ticker_data['Datetime'], format='mixed', errors='coerce').dt.date
-            today_data = ticker_data[ticker_data['Date'] == today]
-            print(f"  Today's data rows for {ticker}: {len(today_data)}")
-            
-            # **FIX: Force fetch if we don't have sufficient today's data**
-            if len(today_data) < 10:  # Need at least 10 bars for today
-                print(f"  🚨 INSUFFICIENT TODAY DATA for {ticker} - forcing fresh fetch")
-                # Fetch today's data starting from market open
-                market_open = datetime.combine(today, datetime.min.time().replace(hour=9, minute=30))
-                end_dt = datetime.now()
-                
-                print(f"  Fetching today's data from {market_open} to {end_dt}")
-                new_data = fetch_minute_bars_for_range(ticker, market_open, end_dt)
-                
-                if not new_data.empty:
-                    print(f"  ✅ Found {len(new_data)} new bars for {ticker}")
-                    all_new_data.append(new_data)
-                else:
-                    print(f"  ❌ No new data returned from Schwab for {ticker}")
-            else:
-                # **FIX: Ensure last_dt is a datetime object**
-                last_dt = pd.to_datetime(last_dt)
-                
-                # Calculate start and end times for new data
-                start_dt = last_dt + timedelta(minutes=1)  # Start after last bar
-                end_dt = datetime.now()
-                
-                if start_dt < end_dt:
-                    # Use the range function to get data between specific dates
-                    print(f"  Fetching incremental data from {start_dt} to {end_dt}")
-                    new_data = fetch_minute_bars_for_range(ticker, start_dt, end_dt)
-                    
-                    if not new_data.empty:
-                        print(f"  Found {len(new_data)} new bars for {ticker}")
-                        all_new_data.append(new_data)
-                    else:
-                        print(f"  No new incremental data for {ticker}")
-                else:
-                    print(f"  Data for {ticker} is up to date")
+            existing_days = set(ticker_data['Date'].dropna().unique())
+            earliest = min(existing_days) if existing_days else today
         else:
-            # No existing data, fetch recent data
-            print(f"  No existing data for {ticker}, fetching fresh data...")
-            new_data = fetch_schwab_minute_ohlcv(ticker, period=1)
+            existing_days = set()
+            earliest = today - timedelta(days=5)
+        all_days = [earliest + timedelta(days=i) for i in range((today-earliest).days+1)]
+        # Only fetch for weekdays (Monday=0, ..., Friday=4) and not US market holidays
+        missing_days = [d for d in all_days if d not in existing_days and d.weekday() < 5 and d not in us_market_holidays_2025]
+        # Fetch missing days (4am-8pm)
+        for day in missing_days:
+            start_dt = eastern.localize(datetime.combine(day, datetime.min.time().replace(hour=4, minute=0)))
+            end_dt = eastern.localize(datetime.combine(day, datetime.min.time().replace(hour=20, minute=0)))
+            print(f"  Fetching missing weekday {day} for {ticker} from {start_dt} to {end_dt}")
+            new_data = fetch_minute_bars_for_range(ticker, start_dt, end_dt)
             if not new_data.empty:
+                print(f"  ✅ Found {len(new_data)} bars for {ticker} on {day}")
                 all_new_data.append(new_data)
             else:
-                print(f"  ❌ No data returned from Schwab for {ticker}")
-    
-    
-    # Rest of your existing logic...
+                print(f"  ❌ No data returned for {ticker} on {day}")
+        # Always fetch the latest minute bars for today, regardless of how many exist
+        start_dt = eastern.localize(datetime.combine(today, datetime.min.time().replace(hour=4, minute=0)))
+        # Find the latest minute in today's data, if any
+        if not ticker_data.empty and today in ticker_data['Date'].values:
+            today_data = ticker_data[ticker_data['Date'] == today]
+            if not today_data.empty:
+                last_minute = today_data['Datetime'].max()
+                # Add 1 minute to last_minute to avoid overlap
+                start_dt = pd.to_datetime(last_minute).tz_localize(eastern, ambiguous='NaT', nonexistent='shift_forward') + pd.Timedelta(minutes=1)
+        end_dt = datetime.now(eastern)
+        
+        # Only try to fetch today's data if market is open or we're in extended hours
+        from datetime import time
+        current_time = datetime.now(eastern).time()
+        market_open = time(4, 0)  # Pre-market starts at 4 AM ET
+        market_close = time(20, 0)  # After-hours ends at 8 PM ET
+        
+        is_market_hours = market_open <= current_time <= market_close
+        
+        if start_dt < end_dt and is_market_hours:
+            print(f"  Fetching latest minute bars for {ticker} from {start_dt} to {end_dt}")
+            new_data = fetch_minute_bars_for_range(ticker, start_dt, end_dt)
+            if not new_data.empty:
+                print(f"  ✅ Found {len(new_data)} new bars for {ticker} (latest minutes)")
+                all_new_data.append(new_data)
+            else:
+                print(f"  ❌ No new data returned for {ticker} (latest minutes)")
+        elif not is_market_hours:
+            print(f"  ⏰ Market closed (current time: {current_time.strftime('%H:%M')}), skipping today's minute data for {ticker}")
+        elif ticker_data.empty:
+            # No data at all, fetch last 5 days
+            print(f"  No existing data for {ticker}, fetching last 5 days...")
+            for i in range(5):
+                day = today - timedelta(days=i)
+                start_dt = eastern.localize(datetime.combine(day, datetime.min.time().replace(hour=4, minute=0)))
+                end_dt = eastern.localize(datetime.combine(day, datetime.min.time().replace(hour=20, minute=0)))
+                print(f"    Fetching {ticker} for {day} from {start_dt} to {end_dt}")
+                new_data = fetch_minute_bars_for_range(ticker, start_dt, end_dt)
+                if not new_data.empty:
+                    print(f"    ✅ Found {len(new_data)} bars for {ticker} on {day}")
+                    all_new_data.append(new_data)
+                else:
+                    print(f"    ❌ No data for {ticker} on {day}")
     if all_new_data:
         print(f"🔗 COMBINING DATA: Found {len(all_new_data)} ticker datasets with new data")
         new_df = pd.concat(all_new_data, ignore_index=True)
@@ -583,16 +865,8 @@ def append_missing_schwab_data(historical_file, tickers, max_ticks=500):
         
         return hist_df
     
-# At startup, after loading tickers:
-historical_data = append_missing_schwab_data(HISTORICAL_DATA_FILE, all_candidate_tickers, max_ticks=500)  # Increased for better AI analysis
-# diagnostic prints
-df = pd.read_csv("historical_data.csv")
-print("Total rows: 316", len(df))
-print("Tickers:", df["Ticker"].unique())
-print("Rows per ticker: 318")
-print(df.groupby("Ticker").size())
-
 def build_fresh_schwab_history_file(tickers, filename="historical_data.csv", max_ticks=500):
+    """Build fresh historical data file from Schwab API up to current time"""
     from schwab_data import fetch_schwab_minute_ohlcv
     dfs = []
     for symbol in tickers:
@@ -616,11 +890,17 @@ def build_fresh_schwab_history_file(tickers, filename="historical_data.csv", max
     else:
         print("⚠️ No data fetched for any ticker.")
 
-#if not is_file_fresh(HISTORICAL_DATA_FILE, min_rows=10):
-    print(f"{HISTORICAL_DATA_FILE} missing or stale, building fresh Schwab history file...")
-    build_fresh_schwab_history_file(tickers, filename=HISTORICAL_DATA_FILE, max_ticks=500)  # Increased for enhanced AI
-#else:
-#    print(f"{HISTORICAL_DATA_FILE} found and fresh, using existing file.")
+# At startup, after loading tickers - ALWAYS rebuild fresh data file
+print(f"🔄 Rebuilding {HISTORICAL_DATA_FILE} with fresh Schwab data up to current time...")
+build_fresh_schwab_history_file(all_candidate_tickers, filename=HISTORICAL_DATA_FILE, max_ticks=500)
+historical_data = pd.read_csv(HISTORICAL_DATA_FILE) if os.path.exists(HISTORICAL_DATA_FILE) else pd.DataFrame()
+
+# diagnostic prints
+df = pd.read_csv("historical_data.csv")
+print("Total rows: 316", len(df))
+print("Tickers:", df["Ticker"].unique())
+print("Rows per ticker: 318")
+print(df.groupby("Ticker").size())
 
 # NOTE: AI recommendations will be called after ticker selection is complete   
 
@@ -630,6 +910,7 @@ ohlcv_buffer = {}
 def schwab_streaming_handler(response):
     global ohlcv_buffer
     try:
+        print(f"[STREAMING HANDLER] Raw response: {response}")
         data = json.loads(response)
         if "data" in data:
             for item in data["data"]:
@@ -638,6 +919,7 @@ def schwab_streaming_handler(response):
                         symbol = quote["key"]
                         price = quote.get("3")
                         volume = quote.get("8")
+                        print(f"[STREAMING HANDLER] {symbol} quote: price={price}, volume={volume}")
                         if price is None or volume is None:
                             continue
                         now_minute = pd.Timestamp.now().floor("min")
@@ -649,8 +931,12 @@ def schwab_streaming_handler(response):
                             "price": price,
                             "volume": volume
                         })
+                        print(f"[STREAMING HANDLER] Updated ohlcv_buffer[{symbol}][{now_minute}]: {ohlcv_buffer[symbol][now_minute]}")
     except Exception as e:
-        print("Error in streaming handler:", e)
+        print("[STREAMING HANDLER] Error in streaming handler:", e)
+
+    # After processing each tick, check if a new minute has started and aggregate
+    streaming_minute_watcher()
 
 def aggregate_ohlcv_for_minute(symbol, minute):
     ticks = ohlcv_buffer[symbol][minute]
@@ -734,36 +1020,41 @@ NEWS_CACHE_FILE = "news_cache.json"
 news_cache = {}
 
 def load_news_cache():
-    global news_cache
-    if os.path.exists(NEWS_CACHE_FILE):
-        with open(NEWS_CACHE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            for k, v in data.items():
-                if isinstance(v, list):
-                    # Old format, just articles
-                    news_cache[k] = (datetime.now(timezone.utc), v)
-                elif isinstance(v, list) or isinstance(v, tuple):
-                    ts, articles = v
-                    news_cache[k] = (datetime.fromisoformat(ts), articles)
-
-def save_news_cache():
-    # Convert datetime keys to ISO format for JSON serialization
-    serializable_cache = {}
-    for k, v in news_cache.items():
-        if isinstance(v, tuple):
-            ts, articles = v
-            serializable_cache[k] = (ts.isoformat(), articles)
+    global ohlcv_buffer
+    import pandas as pd
+    new_rows = []
+    # Allow specifying which minute to aggregate (for end-of-minute logic)
+    minute_to_aggregate = None
+    if len(locals()) > 2 and 'minute_to_aggregate' in locals():
+        minute_to_aggregate = locals()['minute_to_aggregate']
+    if minute_to_aggregate is None:
+        minute_to_aggregate = pd.Timestamp.now().floor("min") - pd.Timedelta(minutes=1)
+    print(f"[DEBUG] Attempting to aggregate streaming data for minute: {minute_to_aggregate}")
+    for ticker in tickers:
+        if ticker in ohlcv_buffer:
+            if minute_to_aggregate in ohlcv_buffer[ticker]:
+                print(f"[DEBUG] Aggregating {ticker} for {minute_to_aggregate}, {len(ohlcv_buffer[ticker][minute_to_aggregate])} ticks in buffer.")
+                agg = aggregate_ohlcv_for_minute(ticker, minute_to_aggregate)
+                print(f"[DEBUG] Aggregated row for {ticker}: {agg}")
+                new_rows.append(agg)
+            else:
+                print(f"[DEBUG] No data in ohlcv_buffer for {ticker} at {minute_to_aggregate}.")
         else:
-            serializable_cache[k] = v
-    with open(NEWS_CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(serializable_cache, f)
-
-load_news_cache()
-
-                                                  # ***** End of function to load and save ETF news cache file *****
-
-                                               # *****Calculate ADX/DMS Indicators with rounding *****
-
+            print(f"[DEBUG] {ticker} not present in ohlcv_buffer.")
+    if new_rows:
+        print(f"[STREAMING] Appending {len(new_rows)} streaming minute(s) to historical data for {minute_to_aggregate}.")
+        df_new = pd.DataFrame(new_rows)
+        print(f"[DEBUG] DataFrame to append:\n{df_new}")
+        before_rows = len(historical_data)
+        historical_data = pd.concat([historical_data, df_new], ignore_index=True)
+        after_concat_rows = len(historical_data)
+        historical_data = historical_data.drop_duplicates(subset=["Datetime", "Ticker"], keep="last")
+        after_dropdup_rows = len(historical_data)
+        print(f"[DEBUG] Rows before append: {before_rows}, after concat: {after_concat_rows}, after drop_duplicates: {after_dropdup_rows}")
+        save_historical_data(historical_data)
+    else:
+        print(f"[STREAMING] No new streaming minute to append for {minute_to_aggregate}.")
+    return historical_data
 # ✅ Ensure merge function runs FIRST, so merged_data_dict is created
 realtime_ds = {}
 
@@ -1871,49 +2162,62 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 if 'Datetime' in df.columns:
                     # First, clean up any malformed datetime strings
                     df['Datetime'] = df['Datetime'].astype(str)
+                    print(f"🔍 [DASHBOARD] Original datetime sample: '{df['Datetime'].iloc[0]}'")
                     
-                    # Remove any trailing ":00" artifacts or other issues
-                    df['Datetime'] = df['Datetime'].str.replace(r':00$', '', regex=True)
-                    df['Datetime'] = df['Datetime'].str.replace(r'\s+', ' ', regex=True)  # Clean extra spaces
-                    
-                    # Try different datetime formats in order of likelihood
+                    # Enhanced datetime parsing with better format detection
                     datetime_parsed = False
+                    sample_values = df['Datetime'].head(5).tolist()
+                    print(f"🔍 [DASHBOARD] Sample datetime values: {sample_values}")
                     
-                    # Try format 1: "YYYY-MM-DD HH:MM"
+                    # Try format 1: "YYYY-MM-DD HH:MM" (standard format)
                     try:
                         df['Datetime'] = pd.to_datetime(df['Datetime'], format='%Y-%m-%d %H:%M')
                         datetime_parsed = True
-                        print("✅ Parsed datetime with format '%Y-%m-%d %H:%M'")
+                        print("✅ [DASHBOARD] Parsed datetime with format '%Y-%m-%d %H:%M'")
                     except ValueError as e:
-                        print(f"Format 1 failed: {e}")
+                        print(f"[DASHBOARD] Format 1 failed: {e}")
+                        print(f"[DASHBOARD] Sample failed values: {df['Datetime'].head(3).tolist()}")
                     
                     # Try format 2: "YYYY-MM-DD HH:MM:SS"
                     if not datetime_parsed:
                         try:
                             df['Datetime'] = pd.to_datetime(df['Datetime'], format='%Y-%m-%d %H:%M:%S')
                             datetime_parsed = True
-                            print("✅ Parsed datetime with format '%Y-%m-%d %H:%M:%S'")
+                            print("✅ [DASHBOARD] Parsed datetime with format '%Y-%m-%d %H:%M:%S'")
                         except ValueError as e:
-                            print(f"Format 2 failed: {e}")
+                            print(f"[DASHBOARD] Format 2 failed: {e}")
                     
-                    # Try format 3: Mixed/infer
+                    # Try format 3: "YYYY-MM-DD HH" (hour only, common in our data)
                     if not datetime_parsed:
                         try:
-                            df['Datetime'] = pd.to_datetime(df['Datetime'], infer_datetime_format=True)
+                            df['Datetime'] = pd.to_datetime(df['Datetime'], format='%Y-%m-%d %H')
                             datetime_parsed = True
-                            print("✅ Parsed datetime with infer_datetime_format")
+                            print("✅ [DASHBOARD] Parsed datetime with format '%Y-%m-%d %H'")
                         except ValueError as e:
-                            print(f"Format 3 failed: {e}")
+                            print(f"[DASHBOARD] Format 3 failed: {e}")
+                    
+                    # Try format 4: Auto-inference (pandas default)
+                    if not datetime_parsed:
+                        try:
+                            df['Datetime'] = pd.to_datetime(df['Datetime'])
+                            datetime_parsed = True
+                            print("✅ [DASHBOARD] Parsed datetime with pandas auto-inference")
+                        except ValueError as e:
+                            print(f"[DASHBOARD] Format 4 failed: {e}")
                     
                     # Last resort: Remove problematic rows
                     if not datetime_parsed:
-                        print("⚠️ Using coerce method, some dates may become NaT")
+                        print("⚠️ [DASHBOARD] Using coerce method as last resort")
+                        original_count = len(df)
                         df['Datetime'] = pd.to_datetime(df['Datetime'], errors='coerce')
                         # Remove rows with invalid dates
-                        before_count = len(df)
                         df = df.dropna(subset=['Datetime'])
-                        after_count = len(df)
-                        print(f"Removed {before_count - after_count} rows with invalid datetimes")
+                        final_count = len(df)
+                        removed_count = original_count - final_count
+                        print(f"[DASHBOARD] Removed {removed_count} rows with invalid datetimes")
+                        if removed_count > (original_count * 0.5):
+                            print("🚨 [DASHBOARD] WARNING: Lost more than 50% of data due to datetime parsing issues!")
+                            print(f"🚨 [DASHBOARD] This suggests a fundamental datetime format problem.")
                 
                 print(f"Dashboard loaded from CSV: {len(df)} rows")
             
@@ -1941,7 +2245,7 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 # Filter to today only
                 df['Date'] = df['Datetime'].dt.date
                 today_data = df[df['Date'] == today].copy()
-                today_data = today_data.drop('Date', axis=1)  # Remove helper column
+                today_data = today_data.drop('Date', axis=1, errors='ignore')  # Remove helper column gracefully
                 
                 print(f"📅 DASHBOARD FILTER: Original data: {len(df)} rows")
                 print(f"📅 DASHBOARD FILTER: Today only ({today}): {len(today_data)} rows")
@@ -1954,7 +2258,7 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                     # If no data for today, use the most recent day's data
                     latest_date = df['Date'].max()
                     df = df[df['Date'] == latest_date].copy()
-                    df = df.drop('Date', axis=1)
+                    df = df.drop('Date', axis=1, errors='ignore')  # Handle missing Date column gracefully
                     print(f"📅 DASHBOARD FILTER: Using latest available date: {latest_date} ({len(df)} rows)")
             
             # Aggregate bars for dashboard display based on settings
@@ -2106,11 +2410,10 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 
                 if not today_data.empty:
                     # Use today's data if available
-                    tdf = today_data.drop('Date', axis=1)
+                    tdf = today_data.copy()
                     print(f"📅 {ticker}: Using {len(tdf)} rows from TODAY ({today})")
                 else:
-                    # Fallback to most recent date available
-                    tdf = tdf.drop('Date', axis=1)  # Remove helper column
+                    # Fallback to most recent date available - don't drop Date from original tdf
                     tdf = tdf.sort_values("Datetime").tail(n).copy()
                     if not tdf.empty:
                         latest_date = pd.to_datetime(tdf["Datetime"]).dt.date.max()
@@ -2149,11 +2452,11 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 
                 if not today_data.empty:
                     # Use today's data
-                    df = today_data.drop('Date', axis=1)
+                    df = today_data.copy()
                     print(f"📅 Using today's data ({today}) for consistent range")
                 else:
                     # Fallback to most recent data available
-                    df = df.drop('Date', axis=1)
+                    df = df.copy()
                     print(f"📅 No data for today, using most recent available data for consistent range")
             
             if df.empty:
@@ -2189,8 +2492,26 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
         #if len(valid_ticker_rows) > 5:
             #valid_ticker_rows = valid_ticker_rows[:5]
 
-        price_plot_df = pd.concat([get_last_n_with_datetime(df, t, price_tick_count) for t in valid_ticker_rows], ignore_index=True)
-        volume_plot_df = pd.concat([get_last_n_with_datetime(df, t, volume_tick_count) for t in valid_ticker_rows], ignore_index=True)
+        print(f"📊 PRICE PLOT DF: About to create price_plot_df for tickers: {valid_ticker_rows}")
+        print(f"📊 PRICE PLOT DF: price_tick_count = {price_tick_count}")
+        
+        try:
+            price_plot_df = pd.concat([get_last_n_with_datetime(df, t, price_tick_count) for t in valid_ticker_rows], ignore_index=True)
+            print(f"📊 PRICE PLOT DF: Successfully created with shape {price_plot_df.shape}")
+            print(f"📊 PRICE PLOT DF: Columns: {price_plot_df.columns.tolist()}")
+        except Exception as price_df_error:
+            print(f"❌ PRICE PLOT DF: Failed to create price_plot_df: {price_df_error}")
+            import traceback
+            traceback.print_exc()
+            # Create empty dataframe as fallback
+            price_plot_df = pd.DataFrame()
+            
+        try:
+            volume_plot_df = pd.concat([get_last_n_with_datetime(df, t, volume_tick_count) for t in valid_ticker_rows], ignore_index=True)
+            print(f"📊 VOLUME PLOT DF: Successfully created with shape {volume_plot_df.shape}")
+        except Exception as volume_df_error:
+            print(f"❌ VOLUME PLOT DF: Failed to create volume_plot_df: {volume_df_error}")
+            volume_plot_df = pd.DataFrame()
         
         # For ADX, use rolling window approach to get sufficient historical data
         print("📊 Creating ADX plot data with rolling window approach...")
@@ -2340,11 +2661,24 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
         try:
             print(f"🎨 CHART DEBUG: Creating price chart with {num_tickers} rows for tickers: {valid_ticker_rows}")
             print(f"🎨 CHART DEBUG: price_plot_df shape: {price_plot_df.shape if 'price_plot_df' in locals() else 'NOT DEFINED'}")
+            print(f"🎨 CHART DEBUG: price_plot_df defined: {'price_plot_df' in locals()}")
+            
+            if 'price_plot_df' not in locals():
+                print("❌ CRITICAL: price_plot_df not defined! This is the root cause of chart failure.")
+                raise NameError("price_plot_df is not defined - data processing failed")
+            
+            if price_plot_df.empty:
+                print("❌ CRITICAL: price_plot_df is empty! No data available for charts.")
+                raise ValueError("price_plot_df is empty - no chart data available")
+            
+            print(f"🎨 CHART DEBUG: Available columns in price_plot_df: {price_plot_df.columns.tolist()}")
+            print(f"🎨 CHART DEBUG: Unique tickers in price_plot_df: {price_plot_df['Ticker'].unique().tolist()}")
             
             if num_tickers == 0:
                 print("❌ CHART DEBUG: num_tickers is 0, returning empty figures")
                 return go.Figure(), go.Figure(), go.Figure(), go.Figure(), html.Div("No valid tickers for charts"), html.Div("No whale data.")
             
+            print(f"🎨 CHART DEBUG: About to call make_subplots with {num_tickers} rows")
             price_fig = make_subplots(
                 rows=num_tickers, cols=1,
                 shared_xaxes=False,
@@ -2352,6 +2686,7 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 subplot_titles=subplot_titles,
                 row_heights=[1]*num_tickers
             )
+            print(f"✅ CHART DEBUG: make_subplots created successfully")
             
             chart_success = False
             for i, ticker in enumerate(valid_ticker_rows, start=1):
@@ -2531,7 +2866,7 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                     today_adx = adx_sub[adx_sub['Date'] == today].copy()
                     
                     if not today_adx.empty:
-                        adx_sub = today_adx.drop('Date', axis=1)
+                        adx_sub = today_adx.drop('Date', axis=1, errors='ignore')  # Handle missing Date column gracefully
                         print(f"📊 DISPLAY FILTER: {ticker} - Using {len(adx_sub)} today's data points for display")
                     else:
                         # If no today data, use the most recent data available
@@ -2654,7 +2989,6 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
         news_rows = []
         # Load the news cache from file (do this once per dashboard update)
         news_cache = load_news_cache()
-        
         # Get latest AI recommendations for news
         latest_ai_for_news = load_latest_ai_recommendations()
         
@@ -3444,31 +3778,6 @@ def select_trade_candidates():
 
 # ====== Example Usage and Dashboard Prep ======
 
-# --- Create Splash Popup at the start of data processing ---
-_day_splash = tk.Tk()
-_day_splash.title("Loading Day Trading Dashboard...")
-_day_splash.geometry("420x130")
-_day_splash.configure(bg="#ffe066")  # Vibrant yellow background
-_day_splash.attributes("-topmost", True)  # Always on top
-_day_splash_label = tk.Label(
-    _day_splash,
-    text="Day Trading Dashboard is starting...\nPlease wait...",
-    font=("Segoe UI", 17, "bold"),
-    fg="#0a2463",  # Deep blue text for high contrast
-    bg="#ffe066",
-    pady=32
-)
-_day_splash_label.pack(expand=True, fill="both")
-_day_splash.update()
-
-# --- Play startup audio notification ---
-try:
-    print("🔊 Playing startup audio notification...")
-    play_audio("day_app_starting.mp3", ticker=None, message=None, tts=False)
-    print("✅ Startup audio played successfully")
-except Exception as e:
-    print(f"⚠️ Could not play startup audio: {e}")
-
 # STEP 1: Ensure we have historical data for ALL candidate tickers before ranking
 print(f"📊 STEP 1: Ensuring historical data for all {len(all_candidate_tickers)} candidate tickers...")
 
@@ -3491,23 +3800,47 @@ try:
         print("🚨 CRITICAL STARTUP ERROR: DATA INTEGRITY FAILURE!")
         print(f"🚨 Errors found: {errors}")
         
+        # Get current market status to provide accurate information
+        market_is_open, market_status, market_explanation = get_market_status_detailed()
+        current_time_str = datetime.now().strftime('%A, %H:%M')
+        
         # Show BLOCKING popup that prevents dashboard startup
         def show_startup_critical_alert():
-            startup_details = [
-                "🚨 CRITICAL: Dashboard startup blocked due to data integrity failure!",
-                "",
-                "SYSTEM STATUS:",
-                f"• Market is currently OPEN (Wednesday, {datetime.now().strftime('%H:%M')})",
-                f"• Expected: All {len(all_candidate_tickers)} tickers should have current data",
-                f"• Reality: Massive data retrieval system failure detected",
-                "",
-                "IMMEDIATE ACTION REQUIRED:",
-                "• Contact Claude for Schwab API troubleshooting",
-                "• Check Schwab authentication tokens",
-                "• Verify network connectivity to Schwab servers",
-                "• Do NOT attempt trading until this is resolved",
-                ""
-            ] + details
+            if market_is_open:
+                # Market is open - this is a real data problem
+                startup_details = [
+                    "🚨 CRITICAL: Dashboard startup blocked due to data integrity failure!",
+                    "",
+                    "SYSTEM STATUS:",
+                    f"• {market_status} ({current_time_str})",
+                    f"• Expected: All {len(all_candidate_tickers)} tickers should have current data",
+                    f"• Reality: Data retrieval system failure detected",
+                    "",
+                    "IMMEDIATE ACTION REQUIRED:",
+                    "• Contact Claude for Schwab API troubleshooting",
+                    "• Check Schwab authentication tokens", 
+                    "• Verify network connectivity to Schwab servers",
+                    "• Do NOT attempt trading until this is resolved",
+                    ""
+                ] + details
+            else:
+                # Market is closed - this is expected behavior
+                startup_details = [
+                    "⚠️ DATA NOTICE: Limited data expected during market closure",
+                    "",
+                    "SYSTEM STATUS:",
+                    f"• {market_status} ({current_time_str})",
+                    f"• {market_explanation}",
+                    f"• Expected: Data available only up to last market close",
+                    f"• Reality: {len(all_candidate_tickers)} tickers being analyzed with available data",
+                    "",
+                    "INFORMATION:",
+                    "• This is normal behavior when markets are closed",
+                    "• Trading data will resume when markets reopen",
+                    "• Dashboard will use most recent available data",
+                    "• System will automatically update when markets open",
+                    ""
+                ] + details
             
             show_data_integrity_error(errors, startup_details)
         
@@ -3534,6 +3867,18 @@ except Exception as e:
     alert_thread.start()
 
 hist_df_full = pd.read_csv(HISTORICAL_DATA_FILE)
+
+# **CRITICAL: Clean up duplicate datetime entries on startup**
+print("🧹 [STARTUP] Checking for datetime formatting inconsistencies...")
+try:
+    cleaned_df = clean_historical_data_duplicates(HISTORICAL_DATA_FILE)
+    if cleaned_df is not None:
+        hist_df_full = cleaned_df  # Use the cleaned data
+        print("✅ [STARTUP] Historical data cleaned successfully")
+    else:
+        print("⚠️ [STARTUP] Using original data (cleanup failed)")
+except Exception as e:
+    print(f"⚠️ [STARTUP] Cleanup error: {e}, continuing with original data")
 
 # Calculate technical indicators for ALL candidates (needed for ranking)
 print("📈 STEP 2: Calculating technical indicators for all candidates...")
@@ -3755,21 +4100,49 @@ def save_historical_data(df, filename="historical_data.csv"):
     """
     Saves DataFrame to CSV, keeping all relevant columns in the correct order.
     """
-    required_cols = ["Datetime", "Ticker", "Open", "High", "Low", "Close", "Volume", "averageVolume10day"]
+    import os
+    
+    # Create a copy to avoid modifying the original DataFrame
+    df = df.copy()
+    
+    # Add missing columns if they don't exist
+    required_cols = ["Datetime", "Ticker", "Open", "High", "Low", "Close", "Volume"]
     for col in required_cols:
         if col not in df.columns:
-            df[col] = np.nan
-    df = df[required_cols]
+            print(f"[DEBUG] Adding missing column: {col}")
+            if col == "Volume":
+                df[col] = 0  # Default volume to 0 instead of NaN
+            else:
+                df[col] = np.nan
+    
+    # Keep only the columns we need
+    available_cols = [col for col in required_cols if col in df.columns]
+    df = df[available_cols]
+    
     df["Datetime"] = pd.to_datetime(df["Datetime"])
     df = df.sort_values(by=["Ticker", "Datetime"], ascending=True)
-    
+
     # **FIX: Use consistent datetime format without seconds**
     df["Datetime"] = df["Datetime"].dt.strftime("%Y-%m-%d %H:%M")
-    
-    print("About to save historical_data.csv")
-    print(df[["Datetime", "Ticker"]].head(3))
-    print(df[["Datetime", "Ticker"]].tail(3))
-    df.to_csv(filename, index=False)
+
+    abs_path = os.path.abspath(filename)
+    print(f"[STREAMING] About to save historical_data.csv at: {abs_path}")
+    print(f"[STREAMING] DataFrame columns: {list(df.columns)}")
+    print(f"[STREAMING] Sample data:")
+    print(df[["Datetime", "Ticker", "Close", "Volume"]].head(2))
+    print(df[["Datetime", "Ticker", "Close", "Volume"]].tail(2))
+    print(f"[STREAMING] Saving to {filename}, total rows: {len(df)}")
+    try:
+        df.to_csv(filename, index=False)
+        # Force flush to disk
+        with open(filename, 'a') as f:
+            f.flush()
+            os.fsync(f.fileno())
+        print(f"[STREAMING] ✅ Save successful: {abs_path}")
+    except Exception as e:
+        print(f"[ERROR] ❌ Failed to save {abs_path}: {e}")
+        import traceback
+        traceback.print_exc()
 
 def update_historical_data(historical_data, new_data, max_entries=10000):
     """
@@ -3990,16 +4363,61 @@ def get_realtime_data(tickers, interval='1m', count=30):
     
 def run_realtime_data(historical_data, tickers, session=None, base_url=None):
     """
-    Uses Schwab streaming for real-time data during market hours,
-    and falls back to 1-min historical data from Schwab for pre/post-market.
+    Uses Schwab streaming for real-time data ONLY during regular market hours (9:30 AM - 4:00 PM ET),
+    and falls back to 1-min historical data from Schwab for pre/post-market and weekends.
     Updates and returns the merged DataFrame.
     """
     global streamer
     header_cols = ["Datetime", "Ticker", "Open", "High", "Low", "Close", "Volume"]
 
-    if is_market_open():
-        print("Market is open. Using Schwab streaming data for real-time updates.")
-        logging.info("Market is open. Using Schwab streaming data for real-time updates.")
+    # Check market status first
+    market_is_open, market_status, market_explanation = get_market_status_detailed()
+    
+    # Additional check for regular trading hours (streaming only works during regular hours)
+    from datetime import datetime
+    import pytz
+    now = datetime.now(pytz.timezone("US/Eastern"))
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    # Weekend check
+    if weekday >= 5:  # Saturday or Sunday
+        print(f"[REALTIME] 🛑 Weekend ({now.strftime('%A')}) - using historical data only")
+        # Ensure streamer is stopped on weekends
+        if streamer is not None:
+            try:
+                streamer.stop()
+                print("✅ Schwab streamer stopped for weekend.")
+            except Exception as e:
+                print(f"⚠️ Error stopping Schwab streamer: {e}")
+            streamer = None
+        return historical_data  # Return unchanged data on weekends
+    
+    # Holiday check - if market status shows closed due to holiday
+    if not market_is_open and "Holiday" in market_status:
+        print(f"[REALTIME] 🛑 Market Holiday ({now.strftime('%B %d, %Y')}) - using historical data only")
+        # Ensure streamer is stopped on holidays
+        if streamer is not None:
+            try:
+                streamer.stop()
+                print("✅ Schwab streamer stopped for market holiday.")
+            except Exception as e:
+                print(f"⚠️ Error stopping Schwab streamer: {e}")
+            streamer = None
+        return historical_data  # Return unchanged data on holidays
+    
+    # Regular market hours check (9:30 AM to 4:00 PM ET on weekdays)
+    is_regular_hours = (
+        weekday < 5 and  # Monday-Friday
+        ((current_hour == 9 and current_minute >= 30) or  # 9:30 AM or later
+         (current_hour > 9 and current_hour < 16) or      # 10 AM - 3:59 PM
+         (current_hour == 16 and current_minute == 0))    # Exactly 4:00 PM
+    )
+
+    if is_regular_hours and market_is_open:
+        print(f"[REALTIME] ✅ Regular trading hours ({now.strftime('%I:%M %p')}) - using Schwab streaming data")
+        logging.info("Market is open during regular hours. Using Schwab streaming data for real-time updates.")
 
         # Start the streamer with your handler (if not already started elsewhere)
         if streamer is None:
@@ -4008,44 +4426,44 @@ def run_realtime_data(historical_data, tickers, session=None, base_url=None):
             for symbol in tickers:
                 streamer.send(streamer.level_one_equities(symbol, "0,3,8"))
 
-        # Build a DataFrame from the latest streaming data
-        global realtime_ds
-        realtime_data_list = []
-        for ticker in tickers:
-            if ticker in realtime_ds and realtime_ds[ticker]:
-                latest = realtime_ds[ticker][-1]
-                dt = pd.Timestamp.now().floor("min")
-                close = latest.get("3") or latest.get("Close")
-                open_ = latest.get("Open", close)
-                high_ = latest.get("High", close)
-                low_ = latest.get("Low", close)
-                volume = latest.get("Volume", 0)
-                realtime_data_list.append({
-                    "Datetime": dt,
-                    "Ticker": ticker,
-                    "Open": open_,
-                    "High": high_,
-                    "Low": low_,
-                    "Close": close,
-                    "Volume": volume
-                })
-        if realtime_data_list:
-            realtime_df = pd.DataFrame(realtime_data_list)
-            historical_data = append_realtime_to_historical(historical_data, realtime_df)
-        else:
-            print("⚠️ No streaming data available, using previous historical data.")
+        # Aggregate and append the latest streaming minute to historical data
+        # Use the last completed minute for aggregation
+        import pandas as pd
+        now_minute = pd.Timestamp.now().floor("min")
+        minute_to_aggregate = now_minute - pd.Timedelta(minutes=1)
+        updated_data = append_latest_streaming_to_historical(historical_data, tickers, minute_to_aggregate)
+        
+        # ✅ Update the global historical_data variable
+        historical_data = updated_data
+        print(f"[STREAMING] ✅ Updated global historical_data: {len(historical_data)} rows")
+        
+        return historical_data
 
     else:
-        print("Market is closed (pre/post-market). Using 1-min historical data from Schwab.")
+        # Market is closed, pre-market, after-hours, or weekend
+        if not is_regular_hours:
+            print(f"[REALTIME] Outside regular hours ({now.strftime('%I:%M %p %A')}) - using historical data")
+        else:
+            print(f"[REALTIME] Market closed ({market_status}) - using historical data")
         
         # --- STOP STREAMER IF RUNNING ---
         if streamer is not None:
             try:
                 streamer.stop()
-                print("✅ Schwab streamer stopped after market close.")
+                print("✅ Schwab streamer stopped after market close/outside regular hours.")
             except Exception as e:
                 print(f"⚠️ Error stopping Schwab streamer: {e}")
             streamer = None
+
+        # **CRITICAL FIX: Only fetch historical data on weekdays (non-holidays), not weekends**
+        if weekday >= 5:  # Weekend
+            print(f"[REALTIME] Weekend - skipping data fetch, returning existing data")
+            return historical_data
+            
+        # Additional holiday check
+        if not market_is_open and "Holiday" in market_status:
+            print(f"[REALTIME] Market Holiday - skipping data fetch, returning existing data")
+            return historical_data
 
         # **CRITICAL FIX: Refresh token proactively when switching from streaming to historical**
         print("🔄 Proactively refreshing Schwab token for after-hours data...")
@@ -4218,11 +4636,66 @@ def is_market_open():
     print(f"Market check: Current time {now.strftime('%H:%M:%S')}, Market open: {is_open}")
     return is_open
 
+def is_regular_trading_hours():
+    """
+    Returns True if current time is during regular trading hours (9:30 AM - 4:00 PM ET, Monday-Friday).
+    Respects US market holidays - returns False on holidays.
+    This is when streaming should be active vs pre/post-market when only historical data should be used.
+    """
+    from datetime import datetime
+    import pytz
+    
+    # Use the comprehensive market status check that includes holidays
+    market_is_open, market_status, market_explanation = get_market_status_detailed()
+    
+    now = datetime.now(pytz.timezone("US/Eastern"))
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    # Weekend check
+    if weekday >= 5:  # Saturday or Sunday
+        return False
+        
+    # Holiday check
+    if not market_is_open and "Holiday" in market_status:
+        return False
+        
+    # Regular market hours check (9:30 AM to 4:00 PM ET on weekdays)
+    is_regular_hours = (
+        weekday < 5 and  # Monday-Friday
+        ((current_hour == 9 and current_minute >= 30) or  # 9:30 AM or later
+         (current_hour > 9 and current_hour < 16) or      # 10 AM - 3:59 PM
+         (current_hour == 16 and current_minute == 0))    # Exactly 4:00 PM
+    )
+    
+    return is_regular_hours
+
 def update_with_latest_minute():
     """
     Updates historical_data.csv with the latest 1-min bars from Schwab for all tickers.
     Handles Schwab 401 Unauthorized errors by refreshing the token and retrying once.
+    Only runs on weekdays (Monday-Friday) and respects US market holidays.
     """
+    from datetime import datetime
+    import pytz
+    
+    # Use comprehensive market status check that includes holidays
+    market_is_open, market_status, market_explanation = get_market_status_detailed()
+    
+    now = datetime.now(pytz.timezone("US/Eastern"))
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    
+    # Weekend check
+    if weekday >= 5:  # Saturday or Sunday
+        print(f"Weekend ({now.strftime('%A')}) - skipping latest minute update.")
+        return
+        
+    # Holiday check
+    if not market_is_open and "Holiday" in market_status:
+        print(f"Market Holiday ({now.strftime('%B %d, %Y')}) - skipping latest minute update.")
+        return
+        
     if not is_market_open():
         print("Market is closed. Skipping latest minute update.")
         return
@@ -4405,7 +4878,12 @@ def run_dashboard_thread():
                 csv_df = pd.read_csv("historical_data.csv")
                 print(f"CSV file: {len(csv_df)} rows, {len(csv_df['Ticker'].unique())} tickers")
                 print(f"CSV tickers: {csv_df['Ticker'].unique()}")
-                print(f"CSV date range: {csv_df['Datetime'].min()} to {csv_df['Datetime'].max()}")
+                try:
+                    # Convert Datetime column to datetime type before finding min/max
+                    csv_df['Datetime'] = pd.to_datetime(csv_df['Datetime'], errors='coerce')
+                    print(f"CSV date range: {csv_df['Datetime'].min()} to {csv_df['Datetime'].max()}")
+                except Exception as e:
+                    print(f"⚠️ Could not determine CSV date range: {e}")
             else:
                 print("❌ No CSV file found")
             
@@ -4627,9 +5105,74 @@ daily_full_quiver_pull(
                                 # ***** End of fetching immediate quiver data *****
 
 def reschedule_jobs():
+
     schedule.clear()
     interval = get_current_interval()
-    schedule.every(interval).minutes.do(update_with_latest_minute)
+
+    def realtime_or_historical_job():
+        # Check market status including holidays
+        market_is_open, market_status, market_explanation = get_market_status_detailed()
+        
+        # Check if we're in regular trading hours
+        from datetime import datetime
+        import pytz
+        now = datetime.now(pytz.timezone("US/Eastern"))
+        weekday = now.weekday()  # 0=Monday, 6=Sunday
+        current_hour = now.hour
+        current_minute = now.minute
+        
+        # Weekend check
+        if weekday >= 5:  # Saturday or Sunday
+            print(f"[SCHEDULER] 🛑 Weekend ({now.strftime('%A')}) - skipping all data updates")
+            return
+            
+        # Holiday check
+        if not market_is_open and "Holiday" in market_status:
+            print(f"[SCHEDULER] 🛑 Market Holiday ({now.strftime('%B %d, %Y')}) - skipping all data updates")
+            return
+            
+        # Regular market hours check (9:30 AM to 4:00 PM ET on weekdays)
+        is_regular_hours = (
+            weekday < 5 and  # Monday-Friday
+            ((current_hour == 9 and current_minute >= 30) or  # 9:30 AM or later
+             (current_hour > 9 and current_hour < 16) or      # 10 AM - 3:59 PM
+             (current_hour == 16 and current_minute == 0))    # Exactly 4:00 PM
+        )
+        
+        if market_is_open and is_regular_hours:
+            global historical_data, tickers
+            print(f"[SCHEDULER] Regular trading hours ({now.strftime('%I:%M %p')}) - running real-time streaming job.")
+            try:
+                historical_data = run_realtime_data(historical_data, tickers)
+            except Exception as e:
+                print(f"[SCHEDULER] Error in run_realtime_data: {e}")
+        else:
+            if weekday < 5 and market_is_open:  # Only run on weekdays when market could be open
+                print(f"[SCHEDULER] Outside regular hours ({now.strftime('%I:%M %p %A')}) - running historical update job.")
+                try:
+                    update_with_latest_minute()
+                except Exception as e:
+                    print(f"[SCHEDULER] Error in update_with_latest_minute: {e}")
+            else:
+                print(f"[SCHEDULER] Weekend/Holiday - skipping historical update job.")
+
+    # ⚡ CRITICAL FIX: Only schedule streaming_minute_watcher during weekdays (non-holidays)
+    from datetime import datetime
+    import pytz
+    now = datetime.now(pytz.timezone("US/Eastern"))
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    market_is_open, market_status, market_explanation = get_market_status_detailed()
+    
+    if weekday < 5 and not ("Holiday" in market_status and not market_is_open):  # Monday-Friday, non-holidays
+        schedule.every(1).minutes.do(streaming_minute_watcher)  # 🔥 Save streaming data every minute (trading days only)
+        print("[SCHEDULER] ✅ Streaming minute watcher scheduled for trading days")
+    else:
+        if weekday >= 5:
+            print(f"[SCHEDULER] 🛑 Weekend ({now.strftime('%A')}) - streaming minute watcher disabled")
+        else:
+            print(f"[SCHEDULER] 🛑 Market Holiday ({now.strftime('%B %d, %Y')}) - streaming minute watcher disabled")
+        
+    schedule.every(interval).minutes.do(realtime_or_historical_job)
     schedule.every(interval).minutes.do(dashboard_update_job)
     schedule.every(30).minutes.do(refresh_quiver_congress_cache, ticker_list=top_5_tickers)
     schedule.every(30).minutes.do(refresh_quiver_institutional_cache, ticker_list=top_5_tickers)
@@ -4661,11 +5204,56 @@ def scheduler_loop():
         time.sleep(30)
 
 
+# 🚀 QUICK START SOLUTION: Start dashboard immediately with minimal initialization
+print("🚀 QUICK START: Starting dashboard with fast initialization...")
+
 # Start the scheduler in a background thread
 scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
 scheduler_thread.start()
 
-# Start the dashboard in the main thread (blocking)
-run_dashboard_thread()
+# Start the dashboard IMMEDIATELY - no blocking operations
+# External data loading will happen in background after dashboard is running
+# Start the dashboard IMMEDIATELY - no blocking operations
+# External data loading will happen in background after dashboard is running
+print("📊 FAST START: Dashboard starting on http://127.0.0.1:8050/")
+print("🚀 [MAIN] Starting dashboard immediately with initial data...")
+
+# Debug: Check the data being passed to dashboard
+print(f"Historical data shape: {historical_data.shape}")
+print(f"Historical data columns: {historical_data.columns.tolist()}")
+print(f"Tickers being passed: {tickers}")
+print(f"Dashboard ranks: {dashboard_ranks}")
+
+# Load historical data and calculate filtered_df before starting dashboard
+adx_df = calculate_adx_multi(historical_data, tickers)
+
+# Create filtered_df by merging technical indicators
+filtered_df = pd.merge(
+    historical_data,
+    adx_df[["Datetime", "Ticker", "ADX", "+DI", "-DI"]],
+    on=["Datetime", "Ticker"],
+    how="left"
+)
+pmo_df = calculate_pmo_multi(filtered_df, tickers)
+if not pmo_df.empty:
+    filtered_df = pd.merge(
+        filtered_df,
+        pmo_df[["Datetime", "Ticker", "PMO", "PMO_signal"]],
+        on=["Datetime", "Ticker"],
+        how="left"
+    )
+cci_df = calculate_cci_multi(filtered_df, tickers)
+if not cci_df.empty:
+    filtered_df = pd.merge(
+        filtered_df,
+        cci_df[["Datetime", "Ticker", "CCI"]],
+        on=["Datetime", "Ticker"],
+        how="left"
+    )
+print(f"filtered_df shape: {filtered_df.shape}")
+print(f"📊 MAIN: Filtered data prepared, starting dashboard at {datetime.now().strftime('%H:%M:%S')}")
+
+# Start Dash app immediately
+start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks)
 
 

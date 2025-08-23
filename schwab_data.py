@@ -45,14 +45,31 @@ def fetch_schwab_minute_ohlcv(symbol, period=1, retry_on_401=True):
     Fetches 1-min OHLCV for symbol. If 401, auto-refreshes token and retries once.
     Returns DataFrame with columns: Datetime, Ticker, Open, High, Low, Close, Volume
     """
-    ensure_fresh_token()  # <-- Add this line!
+    ensure_fresh_token()
     endpoint = f"https://api.schwabapi.com/marketdata/v1/pricehistory"
+    eastern = pytz.timezone("US/Eastern")
+    now = datetime.now(eastern)
+    # Find most recent weekday (skip Sat/Sun)
+    weekday = now.weekday()
+    if weekday >= 5:  # Saturday or Sunday
+        days_back = weekday - 4  # Go back to Friday
+    else:
+        days_back = 0
+    last_trading_day = now - timedelta(days=days_back)
+    last_trading_date = last_trading_day.date()
+    # Fetch enough bars for technicals (e.g., 2 days for safety)
+    start_dt = eastern.localize(datetime.combine(last_trading_date, datetime.min.time().replace(hour=4, minute=0)))
+    end_dt = eastern.localize(datetime.combine(last_trading_date, datetime.min.time().replace(hour=20, minute=0)))
+    start_ms = int(start_dt.astimezone(pytz.utc).timestamp() * 1000)
+    end_ms = int(end_dt.astimezone(pytz.utc).timestamp() * 1000)
     params = {
         "symbol": symbol,
         "periodType": "day",
-        "period": period,
         "frequencyType": "minute",
-        "frequency": 1
+        "frequency": 1,
+        "startDate": start_ms,
+        "endDate": end_ms,
+        "needExtendedHoursData": "true"
     }
 
     def get_headers():
@@ -61,6 +78,7 @@ def fetch_schwab_minute_ohlcv(symbol, period=1, retry_on_401=True):
             "Accept": "application/json"
         }
 
+    print(f"Requesting {symbol} minute bars from {start_dt} to {end_dt} (ms: {start_ms} to {end_ms})")
     response = requests.get(endpoint, headers=get_headers(), params=params)
     if response.status_code == 401 and retry_on_401:
         print(f"🔄 401 Unauthorized for {symbol}, refreshing token and retrying...")
@@ -68,17 +86,26 @@ def fetch_schwab_minute_ohlcv(symbol, period=1, retry_on_401=True):
         response = requests.get(endpoint, headers=get_headers(), params=params)
     if response.status_code != 200:
         print(f"❌ Error fetching OHLCV for {symbol}: {response.status_code}")
+        print(f"Response content: {response.text}")
         return pd.DataFrame()
 
     data = response.json()
     candles = data.get("candles", [])
     if not candles:
         print(f"⚠️ No candles returned for {symbol}")
+        print(f"Raw response: {data}")
         return pd.DataFrame()
     df = pd.DataFrame(candles)
     if df.empty:
         print(f"⚠️ Empty DataFrame for {symbol}")
+        print(f"Raw candles: {candles}")
         return df
+
+    # Log first and last bar times
+    if "datetime" in df.columns:
+        first_bar = pd.to_datetime(df["datetime"].iloc[0], unit="ms", utc=True).tz_convert(eastern)
+        last_bar = pd.to_datetime(df["datetime"].iloc[-1], unit="ms", utc=True).tz_convert(eastern)
+        print(f"First bar: {first_bar}, Last bar: {last_bar}")
 
     # Rename columns to match code expectations
     column_map = {

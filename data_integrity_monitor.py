@@ -379,8 +379,65 @@ def check_data_integrity(df, selected_tickers, ai_recommended_tickers=None):
     current_time = datetime.now()
     today = current_time.date()
     
+    # Determine market status for weekend/holiday awareness
+    def get_simple_market_status():
+        """Simple market status check for data integrity validation"""
+        import pytz
+        
+        # US market holidays (static for 2025)
+        us_market_holidays_2025 = set([
+            datetime(2025, 1, 1).date(),   # New Year's Day
+            datetime(2025, 1, 20).date(),  # Martin Luther King Jr. Day
+            datetime(2025, 2, 17).date(),  # Presidents' Day
+            datetime(2025, 4, 18).date(),  # Good Friday
+            datetime(2025, 5, 26).date(),  # Memorial Day
+            datetime(2025, 6, 19).date(),  # Juneteenth
+            datetime(2025, 7, 4).date(),   # Independence Day
+            datetime(2025, 9, 1).date(),   # Labor Day
+            datetime(2025, 11, 27).date(), # Thanksgiving
+            datetime(2025, 12, 25).date(), # Christmas
+        ])
+        
+        now = datetime.now(pytz.timezone("US/Eastern"))
+        today_date = now.date()
+        weekday = now.weekday()  # 0=Monday, 6=Sunday
+        
+        # Check if today is a weekend
+        if weekday >= 5:  # Saturday or Sunday
+            day_name = now.strftime('%A')
+            return False, f"Market is CLOSED ({day_name})", f"Weekend - Markets closed on {day_name}"
+        
+        # Check if today is a holiday
+        if today_date in us_market_holidays_2025:
+            return False, f"Market is CLOSED (Holiday)", f"US Market Holiday - {now.strftime('%B %d, %Y')}"
+        
+        # Check trading hours (4 AM to 8 PM ET)
+        market_open = now.replace(hour=4, minute=0, second=0, microsecond=0)
+        market_close = now.replace(hour=20, minute=0, second=0, microsecond=0)
+        
+        if now < market_open:
+            return False, f"Market is CLOSED (Pre-market)", f"Market opens at 4:00 AM ET"
+        elif now > market_close:
+            return False, f"Market is CLOSED (After-hours)", f"Market closed at 8:00 PM ET"
+        else:
+            # Market is open - determine which session
+            regular_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+            regular_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+            
+            if now < regular_open:
+                return True, f"Market is OPEN (Pre-market)", f"Pre-market session: 4:00-9:30 AM ET"
+            elif now <= regular_close:
+                return True, f"Market is OPEN (Regular)", f"Regular session: 9:30 AM-4:00 PM ET"
+            else:
+                return True, f"Market is OPEN (After-hours)", f"After-hours session: 4:00-8:00 PM ET"
+    
+    market_is_open, market_status, market_explanation = get_simple_market_status()
+    
     details.append(f"🔍 DATA INTEGRITY CHECK - {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
     details.append("=" * 70)
+    details.append("")
+    details.append(f"📊 Market Status: {market_status}")
+    details.append(f"   {market_explanation}")
     details.append("")
     
     # Check if DataFrame is empty
@@ -396,15 +453,23 @@ def check_data_integrity(df, selected_tickers, ai_recommended_tickers=None):
     try:
         df['Datetime'] = pd.to_datetime(df['Datetime'], format='mixed')
         df['Date'] = df['Datetime'].dt.date
+        
+        # Check for today's data with safe date comparison
+        today_data = df[df['Date'] == today]
     except Exception as e:
         errors.append("DATETIME_PARSE_ERROR")
         details.append(f"❌ Cannot parse datetime column: {str(e)}")
+        details.append(f"❌ Error at line 398-405 in data_integrity_monitor.py")
         details.append("")
+        # Use empty DataFrame as fallback
+        today_data = pd.DataFrame()
     
-    # Check for today's data
-    today_data = df[df['Date'] == today]
     details.append(f"📅 Today's date: {today}")
     details.append(f"📊 Today's data rows: {len(today_data)}")
+    
+    if not market_is_open:
+        details.append(f"ℹ️  Note: No today's data expected since markets are closed")
+    
     details.append("")
     
     # Check each ticker's data availability
@@ -424,18 +489,36 @@ def check_data_integrity(df, selected_tickers, ai_recommended_tickers=None):
         has_recent_data = False
         
         if has_data:
-            latest_date = ticker_data['Date'].max()
-            days_old = (today - latest_date).days
-            has_recent_data = days_old <= 1
+            try:
+                latest_date = ticker_data['Date'].max()
+                if pd.isna(latest_date):
+                    raise ValueError("Latest date is NaN")
+                days_old = (today - latest_date).days
+                # If market is closed, consider yesterday's data as "current"
+                has_recent_data = days_old <= (2 if not market_is_open else 1)
+            except (TypeError, ValueError) as date_error:
+                details.append(f"⚠️ {ticker}: Date comparison error at line 428: {date_error}")
+                has_recent_data = False
+                latest_date = "ERROR"
         
-        # Determine ticker status
-        if has_today_data and len(ticker_today) >= 10:
-            details.append(f"✅ {ticker}: {len(ticker_today)} rows today (GOOD)")
-            valid_tickers += 1
-        elif has_recent_data:
-            details.append(f"⚠️ {ticker}: No today data, but recent data available")
+        # Determine ticker status based on market status
+        if market_is_open:
+            # Market is open - expect today's data
+            if has_today_data and len(ticker_today) >= 10:
+                details.append(f"✅ {ticker}: {len(ticker_today)} rows today (GOOD)")
+                valid_tickers += 1
+            elif has_recent_data:
+                details.append(f"⚠️ {ticker}: No today data, but recent data available")
+            else:
+                details.append(f"❌ {ticker}: No current data (latest: {latest_date if has_data else 'NONE'})")
         else:
-            details.append(f"❌ {ticker}: No current data (latest: {latest_date if has_data else 'NONE'})")
+            # Market is closed - don't expect today's data, recent data is fine
+            if has_recent_data:
+                latest_date_str = ticker_data['Date'].max().strftime('%Y-%m-%d') if has_data else 'NONE'
+                details.append(f"✅ {ticker}: Recent data available through {latest_date_str} (NORMAL for {market_status.split()[3] if len(market_status.split()) > 3 else 'closed market'})")
+                valid_tickers += 1
+            else:
+                details.append(f"❌ {ticker}: No recent data (latest: {latest_date if has_data else 'NONE'})")
     
     details.append("")
     
@@ -444,22 +527,36 @@ def check_data_integrity(df, selected_tickers, ai_recommended_tickers=None):
     details.append(f"📊 TICKER COVERAGE SUMMARY:")
     details.append(f"   Valid tickers: {valid_tickers} / {total_tickers}")
     details.append(f"   Coverage percentage: {coverage_percent:.1f}%")
+    details.append(f"   Market status: {market_status}")
     details.append("")
     
-    # Determine if coverage is sufficient
-    if coverage_percent < 80:
+    # Determine if coverage is sufficient (more lenient when markets are closed)
+    required_coverage = 60 if not market_is_open else 80  # Lower threshold for closed markets
+    
+    if coverage_percent < required_coverage:
         errors.append("INSUFFICIENT_TICKER_DATA_COVERAGE")
-        details.append("🚨 CRITICAL: Insufficient ticker data coverage!")
-        details.append(f"   Expected: >80% coverage for reliable trading")
-        details.append(f"   Actual: {coverage_percent:.1f}% coverage")
-        details.append("   This indicates systematic failure of data retrieval")
-        details.append("")
-        details.append("🔧 LIKELY CAUSES:")
-        details.append("   • Schwab API authentication failure")
-        details.append("   • Expired or invalid access tokens")
-        details.append("   • Network connectivity issues")
-        details.append("   • API rate limiting")
-        details.append("   • Market data subscription problems")
+        
+        if market_is_open:
+            details.append("🚨 CRITICAL: Insufficient ticker data coverage during market hours!")
+            details.append(f"   Expected: >{required_coverage}% coverage for reliable trading")
+            details.append(f"   Actual: {coverage_percent:.1f}% coverage")
+            details.append("   This indicates systematic failure of real-time data retrieval")
+            details.append("")
+            details.append("🔧 IMMEDIATE ACTIONS REQUIRED:")
+            details.append("   • Check Schwab API authentication")
+            details.append("   • Verify access tokens are not expired")
+            details.append("   • Test network connectivity to Schwab servers")
+            details.append("   • Check for API rate limiting")
+        else:
+            details.append("⚠️ NOTICE: Low data coverage detected during market closure")
+            details.append(f"   Expected: >{required_coverage}% coverage (reduced for {market_status})")
+            details.append(f"   Actual: {coverage_percent:.1f}% coverage")
+            details.append(f"   {market_explanation}")
+            details.append("")
+            details.append("🔧 RECOMMENDED ACTIONS:")
+            details.append("   • This may be normal for weekend/holiday periods")
+            details.append("   • Verify historical data is updating properly")
+            details.append("   • Data should improve when markets reopen")
         details.append("")
     
     # Check for required columns
