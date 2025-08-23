@@ -160,6 +160,10 @@ def calculate_pivot_points(df):
     Returns a DataFrame with new columns: Pivot, R1, S1, R2, S2, R3, S3.
     """
     df = df.copy()
+    # Ensure price columns are numeric
+    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
     df['Pivot'] = (df['High'] + df['Low'] + df['Close']) / 3
     df['R1'] = 2 * df['Pivot'] - df['Low']
     df['S1'] = 2 * df['Pivot'] - df['High']
@@ -174,6 +178,11 @@ def score_pivot_proximity(current_price, pivot, r1, s1):
     Score price proximity to pivot/resistance/support (1-5).
     5 = price near support (bullish), 1 = price near resistance (bearish), 3 = near pivot (neutral).
     """
+    # Ensure all inputs are float
+    current_price = float(current_price)
+    pivot = float(pivot)
+    r1 = float(r1)
+    s1 = float(s1)
     if abs(current_price - s1) < abs(current_price - pivot) and abs(current_price - s1) < abs(current_price - r1):
         return 5  # Near support
     elif abs(current_price - r1) < abs(current_price - pivot) and abs(current_price - r1) < abs(current_price - s1):

@@ -1,19 +1,19 @@
 Ticker,Avg Div Interval,Est. Frequency,Yield Est (%),EPS,Payout Ratio,Beta,Div History (yrs),5Y Growth Rate (%),Debt/Equity,Sector,Industry,Source,Continuation Prob (%),Last Updated,Label,Ex-Dividend Date,Payout Date
-ABR,107.4,Quarterly,7.65,1.29,1.49,1.29,20.9,-11.04,318.89,Real Estate,REIT - Mortgage,FMP,41.4,2025-08-08,0.0,"August 16, 25",2025-08-30
-ACP,30.5,Monthly,15.63,1.27,1.08,0.86,14.2,-3.58,27.91,Financial Services,Asset Management,FMP,53.2,2025-08-08,1.0,"June 23, 25",2025-06-23
-AGNC,40.3,Monthly,11.48,1.1,1.44,1.28,17.0,-5.43,659.93,Real Estate,REIT - Mortgage,FMP,49.1,2025-08-08,1.0,"June 30, 25",2025-07-10
-BRSP,62.1,Quarterly,17.98,-1.04,-0.75,1.56,7.3,1.36,229.65,Real Estate,REIT - Mortgage,FMP,46.4,2025-08-08,0.0,"June 30, 25",2025-07-14
-ECC,34.0,Monthly,24.02,0.86,1.97,0.43,10.7,-12.0,37.97,Financial Services,Asset Management,FMP,59.9,2025-08-08,1.0,"July 11, 25",2025-07-31
-OFS,92.6,Quarterly,16.44,2.12,0.64,1.38,12.4,5.75,153.76,Financial Services,Asset Management,FMP,47.2,2025-08-08,0.0,"June 20, 25",2025-06-20
-BITO,30.4,Monthly,56.13,0.0,0.0,0.85,3.7,128.54,0.0,N/A,N/A,FMP,69.8,2025-08-08,0.0,"July 01, 25",2025-07-08
-CHMI,91.4,Quarterly,21.51,0.0,2.35,1.08,11.5,-9.11,523.61,Real Estate,REIT - Mortgage,FMP,51.1,2025-08-08,0.0,"June 30, 25",2025-06-30
-DSL,30.4,Monthly,10.83,1.09,0.5,0.755,12.0,-2.55,0.0,Financial Services,Asset Management,FMP,68.2,2025-08-08,1.0,"June 18, 25",2025-06-18
-DX,68.6,Monthly,6.89,0.79,1.03,0.92,37.0,-3.35,518.55,Real Estate,REIT - Mortgage,FMP,37.8,2025-08-08,1.0,"June 23, 25",2025-07-01
-EIC,30.0,Monthly,12.73,2.81,0.83,0.19,6.1,-2.81,40.25,Financial Services,Asset Management,FMP,68.7,2025-08-08,1.0,"September 10, 25",2025-09-10
-MORT,93.0,Quarterly,14.33,1.09,183.0,0.73,13.5,-4.23,0.0,,,FMP,67.2,2025-08-08,,"April 01, 25",2025-04-01
-NHS,30.3,Monthly,14.62,0.84,0.76,0.77,21.8,-1.9,41.01,Financial Services,Asset Management,FMP,46.3,2025-08-08,1.0,"June 16, 25",2025-06-16
-PDI,29.3,Monthly,13.71,1.96,1.08,0.61,12.9,1.72,0.0,Financial Services,Asset Management,FMP,68.3,2025-08-08,1.0,"June 12, 25",2025-06-12
-QDTE,7.0,Weekly,21.53,1.09,0.0,0.98,1.2,-53.37,0.0,,,FMP,65.8,2025-08-08,,"June 12, 25",2025-06-12
-QYLD,30.4,Monthly,11.81,0.51,445.6,0.9,11.4,-3.78,0.0,,,FMP,68.4,2025-08-08,,"June 23, 25",2025-06-23
-RYLD,30.4,Monthly,12.04,0.94,203.0,0.78,6.0,-7.37,0.0,,,FMP,69.5,2025-08-08,,"May 19, 25",2025-05-19
-SVOL,31.1,Monthly,21.34,0.69,0.0,1.91,3.7,4.38,0.0,,,FMP,71.5,2025-08-08,,"May 27, 25",2025-05-27
+ABR,107.4,Quarterly,7.75,1.29,1.49,1.29,20.9,-11.04,318.89,Real Estate,REIT - Mortgage,FMP,41.3,2025-08-21,0.0,"August 16, 25",2025-08-30
+ACP,30.5,Monthly,15.6,1.27,1.08,0.86,14.2,-3.58,27.91,Financial Services,Asset Management,FMP,53.2,2025-08-21,1.0,"June 23, 25",2025-06-23
+AGNC,40.3,Monthly,11.12,1.1,1.44,1.28,17.0,-5.43,659.93,Real Estate,REIT - Mortgage,FMP,49.2,2025-08-21,1.0,"June 30, 25",2025-07-10
+BRSP,62.1,Quarterly,17.02,-1.04,-0.75,1.56,7.3,1.36,229.65,Real Estate,REIT - Mortgage,FMP,46.8,2025-08-21,0.0,"June 30, 25",2025-07-14
+ECC,34.0,Monthly,22.81,0.86,1.97,0.43,10.7,-12.0,37.97,Financial Services,Asset Management,FMP,60.3,2025-08-21,1.0,"July 11, 25",2025-07-31
+OFS,92.6,Quarterly,16.41,2.12,0.64,1.38,12.4,5.75,153.76,Financial Services,Asset Management,FMP,47.3,2025-08-21,0.0,"June 20, 25",2025-06-20
+BITO,30.4,Monthly,57.87,0.0,0.0,0.85,3.7,128.54,0.0,,,FMP,68.6,2025-08-21,0.0,"July 01, 25",2025-07-08
+CHMI,91.4,Quarterly,20.41,0.39,2.35,1.08,11.5,-9.11,523.61,Real Estate,REIT - Mortgage,FMP,52.1,2025-08-21,0.0,"June 30, 25",2025-06-30
+DSL,30.4,Monthly,10.8,1.09,0.5,0.755,12.0,-2.55,0.0,Financial Services,Asset Management,FMP,68.2,2025-08-21,1.0,"June 18, 25",2025-06-18
+DX,68.6,Monthly,6.79,0.79,1.03,0.92,37.0,-3.35,518.55,Real Estate,REIT - Mortgage,FMP,37.8,2025-08-21,1.0,"June 23, 25",2025-07-01
+EIC,30.0,Monthly,11.81,2.81,0.83,0.19,6.1,-2.81,40.25,Financial Services,Asset Management,FMP,69.4,2025-08-21,1.0,"September 10, 25",2025-09-10
+MORT,93.0,Quarterly,14.05,1.09,183.0,0.73,13.5,-4.23,0.0,,,FMP,67.2,2025-08-21,,"April 01, 25",2025-04-01
+NHS,30.3,Monthly,14.78,0.84,0.76,0.77,21.8,-1.9,41.01,Financial Services,Asset Management,FMP,46.2,2025-08-21,1.0,"June 16, 25",2025-06-16
+PDI,29.3,Monthly,13.77,1.96,1.08,0.61,12.9,1.72,0.0,Financial Services,Asset Management,FMP,68.3,2025-08-21,1.0,"June 12, 25",2025-06-12
+QDTE,7.0,Weekly,21.73,1.09,0.0,0.98,1.2,-53.37,0.0,,,FMP,65.8,2025-08-21,,"June 12, 25",2025-06-12
+QYLD,30.4,Monthly,12.04,0.51,445.6,0.9,11.4,-3.78,0.0,,,FMP,68.3,2025-08-21,,"June 23, 25",2025-06-23
+RYLD,30.4,Monthly,11.99,0.94,203.0,0.78,6.0,-7.37,0.0,N/A,N/A,FMP,69.5,2025-08-21,,"May 19, 25",2025-05-19
+SVOL,31.1,Monthly,20.92,0.69,0.0,1.91,3.7,4.38,0.0,,,FMP,71.5,2025-08-21,,"May 27, 25",2025-05-27

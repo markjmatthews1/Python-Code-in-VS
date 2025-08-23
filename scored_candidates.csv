@@ -1,17 +1,17 @@
 Ticker,Avg Div Interval,Est. Frequency,Yield Est (%),EPS,Payout Ratio,Beta,Div History (yrs),5Y Growth Rate (%),Debt/Equity,Sector,Industry,Source,Continuation Prob (%),Last Updated,Label,Ex-Dividend Date,Payout Date
 ECC,34.0,monthly,19.82,0.86,1.97,0.43,10.7,-12.0,37.97,Financial Services,Asset Management,Manual,65.8,2025-07-10,1.0,"September 10, 25",2025-09-10
-ORC,30.5,monthly,20.45,0.58,2.46,1.5,12.3,-0.95,749.95,Real Estate,REIT - Mortgage,FMP,45.8,2025-08-08,1.0,"June 30, 25",2025-06-30
+ORC,30.5,monthly,20.28,0.58,2.46,1.5,12.3,-0.95,749.95,Real Estate,REIT - Mortgage,FMP,45.9,2025-08-21,1.0,"June 30, 25",2025-06-30
 ARR,31.9,monthly,15.77,-0.28,-11.32,1.35,15.3,-3.28,737.28,Real Estate,REIT - Mortgage,Manual,73.2,2025-07-10,1.0,"June 16, 25",2025-06-16
-ACP,30.5,monthly,15.63,1.27,1.08,0.86,14.2,-3.58,27.91,Financial Services,Asset Management,FMP,53.2,2025-08-08,1.0,"June 23, 25",2025-06-23
+ACP,30.5,monthly,15.6,1.27,1.08,0.86,14.2,-3.58,27.91,Financial Services,Asset Management,FMP,53.2,2025-08-21,1.0,"June 23, 25",2025-06-23
 NXDT,33.2,monthly,34.57,1.49,-0.2,0.83,18.7,22.88,43.4,Real Estate,REIT - Diversified,Manual,68.6,2025-07-12,0.0,"May 09, 25",2025-05-09
-BCAT,30.4,monthly,22.3,1.83,1.45,0.77,4.5,24.44,0.5,Financial Services,Asset Management,FMP,74.5,2025-08-08,1.0,"June 13, 25",2025-06-13
-ECAT,30.4,monthly,21.64,2.37,1.2,0.94,3.5,36.43,0.5,Financial Services,Asset Management,FMP,76.9,2025-08-08,1.0,"June 13, 25",2025-06-13
+BCAT,30.4,monthly,22.74,1.83,1.45,0.77,4.5,24.44,0.5,Financial Services,Asset Management,FMP,74.5,2025-08-21,1.0,"June 13, 25",2025-06-13
+ECAT,30.4,monthly,21.69,2.37,1.2,0.94,3.5,36.43,0.5,Financial Services,Asset Management,FMP,76.9,2025-08-21,1.0,"June 13, 25",2025-06-13
 CCIF,30.6,monthly,19.66,0.39,2.65,0.24,8.6,13.63,0.49,Financial Services,Asset Management,FMP,91.3,2025-07-05,1.0,"August 19, 25",2025-08-19
 EMD,30.8,monthly,11.25,0.0,0.97,0.81,21.5,-2.1,32.44,Financial Services,Asset Management,Manual,47.8,2025-07-10,,"August 22, 25",2025-08-22
 PGP,30.3,monthly,9.95,0.0,0.77,1.08,19.9,-4.79,20.06,Financial Services,Asset Management,Manual,59.0,2025-07-10,,"June 12, 25",2025-06-12
 HIO,31.1,monthly,10.66,0.0,0.0,0.54,31.7,-1.31,0.0,Financial Services,Asset Management,Manual,53.1,2025-07-10,,"August 22, 25",2025-08-22
 PCF,31.2,monthly,11.12,0.0,0.0,0.75,37.9,-0.47,0.0,Financial Services,Asset Management,Manual,46.6,2025-07-12,,"June 17, 25",2025-06-17
-PFLT,30.4,monthly,11.65,1.4,0.86,0.96,14.0,5.26,127.98,Financial Services,Asset Management,Manual,52.0,2025-07-12,,"June 16, 25",2025-06-16
+PFLT,30.4,monthly,12.09,1.4,0.86,0.96,14.0,5.26,127.98,Financial Services,Asset Management,FMP,55.0,2025-08-21,,"June 16, 25",2025-06-16
 IPOOF,30.3,monthly,11.15,0.61,1.73,1.57,2.5,101.19,23.91,Energy,Oil & Gas E&P,Manual,70.8,2025-07-12,,"May 15, 25",2025-05-15
 FTF,30.4,monthly,11.45,0.5,1.49,0.48,21.7,-2.16,38.51,Financial Services,Asset Management,FMP,,2025-07-08,,"June 16, 25",2025-06-16
 AWP,30.2,monthly,12.44,,0.43,1.35,18.0,-6.2,23.22,Financial Services,Asset Management,FMP,,,,"June 23, 25",2025-06-23
@@ -19,14 +19,14 @@ BGT,30.4,monthly,11.52,1.11,1.3,0.49,20.7,1.23,19.33,Financial Services,Asset Ma
 PFN,30.4,monthly,11.53,,0.9,0.6,20.5,-1.16,12.04,Financial Services,Asset Management,FMP,,,,"June 12, 25",2025-06-12
 PFL,30.1,monthly,11.69,,0.92,0.64,21.6,0.22,18.07,Financial Services,Asset Management,FMP,,,,"June 12, 25",2025-06-12
 PHK,30.3,monthly,11.94,,0.89,0.67,22.0,-4.15,14.65,Financial Services,Asset Management,FMP,,,,"June 12, 25",2025-06-12
-JFR,30.6,monthly,12.0,1.17,0.83,0.45,21.1,1.1,38.78,Financial Services,Asset Management,FMP,56.4,2025-08-06,,"June 13, 25",2025-06-13
+JFR,30.6,monthly,12.14,1.17,0.83,0.45,21.1,1.1,38.78,Financial Services,Asset Management,FMP,56.3,2025-08-21,,"June 13, 25",2025-06-13
 VVR,30.4,monthly,11.98,,1.64,0.35,26.9,-1.98,57.08,Financial Services,Asset Management,FMP,,,,"June 17, 25",2025-06-17
-EHI,30.8,monthly,12.73,0.55,0.95,0.76,21.9,-1.89,32.8,Financial Services,Asset Management,FMP,46.1,2025-08-08,,"August 22, 25",2025-08-22
+EHI,30.8,monthly,12.71,0.55,0.95,0.76,21.9,-1.89,32.8,Financial Services,Asset Management,FMP,46.4,2025-08-21,,"August 22, 25",2025-08-22
 SPMC,30.5,monthly,16.7,3.14,58.11,0.0,1.2,-14.1,0.18,,,Manual,36.8,2025-07-13,,"September 15, 25",2025-09-15
 AVK,29.4,monthly,11.57,,0.46,1.28,22.0,-1.72,58.75,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
 DMO,29.5,monthly,13.01,,1.01,0.34,15.3,-0.48,84.22,Financial Services,Asset Management,FMP,,,,"August 22, 25",2025-08-22
 NHS,30.3,monthly,14.35,,0.76,0.77,21.8,-1.9,41.01,Financial Services,Asset Management,FMP,,,,"June 16, 25",2025-06-16
-FCO,30.4,monthly,12.65,0.65,1.28,0.39,33.3,-1.21,46.19,Financial Services,Asset Management,FMP,43.7,2025-08-08,,"June 23, 25",2025-06-23
+FCO,30.4,monthly,12.54,0.65,1.28,0.39,33.3,-1.21,46.19,Financial Services,Asset Management,FMP,43.8,2025-08-21,,"June 23, 25",2025-06-23
 IGR,30.3,monthly,13.71,-0.38,-1.86,1.4,21.1,-2.09,48.25,Financial Services,Asset Management,FMP,,2025-07-08,,"June 20, 25",2025-06-20
 EIC,30.0,monthly,11.34,,0.83,0.19,6.1,-2.81,40.25,Financial Services,Asset Management,FMP,,,,"September 10, 25",2025-09-10
 MEGI,30.7,monthly,10.71,,4.28,,3.6,4.14,,Financial Services,Asset Management,FMP,,,,"August 25, 25",2025-08-25
@@ -36,15 +36,15 @@ CCD,30.5,monthly,11.49,,0.5,,10.0,1.56,,Financial Services,Asset Management,FMP,
 DSL,30.4,monthly,10.86,,0.5,,12.0,-2.55,,Financial Services,Asset Management,FMP,,,,"June 18, 25",2025-06-18
 XFLT,30.5,monthly,14.79,,1.0,,7.6,0.19,,Financial Services,Asset Management,FMP,,,,"June 16, 25",2025-06-16
 FSCO,30.3,monthly,11.23,,0.75,,2.6,19.14,,Financial Services,Asset Management,FMP,,,,"June 23, 25",2025-06-23
-GOF,30.3,monthly,14.58,1.67,1.33,0.0,17.8,1.41,0.0,Financial Services,Asset Management,FMP,64.9,2025-08-08,,"June 13, 25",2025-06-13
+GOF,30.3,monthly,14.73,1.67,1.33,0.0,17.8,1.41,0.0,Financial Services,Asset Management,FMP,64.9,2025-08-21,,"June 13, 25",2025-06-13
 JRI,31.7,monthly,11.89,,1.54,,12.9,-7.55,,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
-PDI,29.3,monthly,13.71,1.96,1.08,0.0,12.9,1.72,0.0,Financial Services,Asset Management,FMP,68.3,2025-08-08,,"June 12, 25",2025-06-12
+PDI,29.3,monthly,13.77,1.96,1.08,0.0,12.9,1.72,0.0,Financial Services,Asset Management,FMP,68.3,2025-08-21,,"June 12, 25",2025-06-12
 PDO,29.6,monthly,11.36,,4.98,,4.2,1.94,,Financial Services,Asset Management,FMP,,,,"June 12, 25",2025-06-12
-THQ,30.5,monthly,14.15,4.58,0.41,0.0,10.8,4.45,0.0,Financial Services,Asset Management,FMP,70.1,2025-08-08,,"June 23, 25",2025-06-23
+THQ,30.5,monthly,12.63,4.58,0.41,0.0,10.8,4.45,0.0,Financial Services,Asset Management,FMP,70.1,2025-08-21,,"June 23, 25",2025-06-23
 GBAB,30.4,monthly,10.07,,1.58,,14.4,0.5,,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
 PAXS,29.4,monthly,11.82,,0.9,,3.2,7.94,,Financial Services,Asset Management,FMP,,,,"June 12, 25",2025-06-12
 BMEZ,30.4,monthly,14.04,,,,5.2,10.62,,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
-BSTZ,30.4,monthly,12.1,3.77,0.56,0.0,5.8,14.36,0.0,Financial Services,Asset Management,FMP,72.2,2025-08-08,,"June 13, 25",2025-06-13
+BSTZ,30.4,monthly,12.56,3.77,0.56,0.0,5.8,14.36,0.0,Financial Services,Asset Management,FMP,72.3,2025-08-21,,"June 13, 25",2025-06-13
 BWG,30.3,monthly,11.41,,0.54,,13.3,-2.85,,Financial Services,Asset Management,FMP,,,,"August 22, 25",2025-08-22
 GDO,30.4,monthly,12.47,,0.65,,15.6,-0.41,,Financial Services,Asset Management,FMP,,,,"August 22, 25",2025-08-22
 OPP,30.4,monthly,13.41,,1.17,,8.6,-1.69,,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
@@ -52,7 +52,7 @@ PGZ,30.4,monthly,12.05,,0.38,,11.9,-2.09,,Financial Services,Asset Management,FM
 RIV,29.7,monthly,12.45,,,,9.3,-0.98,,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
 RSF,30.5,monthly,11.04,,0.85,,5.9,-15.24,,Financial Services,Asset Management,FMP,,,,"June 13, 25",2025-06-13
 PDCC,30.5,monthly,14.8,,,,0.9,0.0,,Financial Services,Asset Management,FMP,,,,"July 17, 25",2025-07-17
-HGLB,30.5,monthly,12.72,1.38,0.6,0.0,6.3,-2.91,0.0,Financial Services,Asset Management,FMP,70.0,2025-08-08,,"June 23, 25",2025-06-23
+HGLB,30.5,monthly,12.51,1.38,0.6,0.0,6.3,-2.91,0.0,Financial Services,Asset Management,FMP,70.0,2025-08-21,,"June 23, 25",2025-06-23
 SQFTP,30.5,monthly,16.87,-0.55,-428.45,1.36,4.0,17.02,256.56,Real Estate,REIT - Diversified,Manual,79.8,2025-07-13,,"June 30, 25",2025-06-30
 AOD,30.2,monthly,12.11,,,0.93,18.1,-3.76,1.03,Financial Services,Asset Management,FMP,,,,"June 23, 25",2025-06-23
 NPFD,30.4,monthly,10.37,2.71,0.47,0.73,3.3,6.05,59.06,Financial Services,Asset Management,FMP,,2025-07-08,,"June 13, 25",2025-06-13

@@ -28,28 +28,23 @@ auth_file_path = "C:/Users/mjmat/Python Code in VS/auth_data.json"
 
 def save_tokens(oauth_token, oauth_token_secret):
     """ Store OAuth tokens in a JSON file with today's date. """
+    print(f"[DEBUG] Saving tokens: oauth_token={oauth_token}, oauth_token_secret={oauth_token_secret}")
     with open(auth_file_path, "w") as file:
         json.dump({
             "oauth_token": oauth_token,
             "oauth_token_secret": oauth_token_secret,
             "date": datetime.now().strftime("%Y-%m-%d")
         }, file)
+    print(f"[DEBUG] Tokens saved to {auth_file_path}")
 
 def load_tokens():
-    """ Load OAuth tokens if they exist and are from today. """
+    """ Load OAuth tokens if they exist. """
     if os.path.exists(auth_file_path):
         with open(auth_file_path, "r") as file:
             data = json.load(file)
-        token_date = data.get("date")
-        if token_date:
-            token_date = datetime.strptime(token_date, "%Y-%m-%d").date()
-            today = datetime.now().date()
-            if token_date < today:
-                # Token is from yesterday or earlier, delete and force refresh
-                os.remove(auth_file_path)
-                print("❌ OAuth token expired (from previous day). File deleted.")
-                return None, None
+        print(f"[DEBUG] Loaded tokens from {auth_file_path}: {data}")
         return data.get("oauth_token"), data.get("oauth_token_secret")
+    print(f"[DEBUG] No token file found at {auth_file_path}")
     return None, None
 
 def get_auth_token():
@@ -171,13 +166,25 @@ def authorize_etrade(force_new=False):
         return None, None
       
 
+
+# --- Global session/base_url cache ---
+_etrade_session_cache = {
+    'session': None,
+    'base_url': None,
+    'token': None,
+    'secret': None
+}
+
 def get_etrade_session(force_new=False):
     """
-    Returns an authenticated OAuth1Session and base_url.
-    Handles token refresh automatically.
-    If force_new is True, always starts a new OAuth flow.
+    Returns a cached authenticated OAuth1Session and base_url.
+    Only triggers OAuth flow if no valid session or force_new is True.
     """
     from requests_oauthlib import OAuth1Session
+    global _etrade_session_cache
+
+    if not force_new and _etrade_session_cache['session'] is not None:
+        return _etrade_session_cache['session'], _etrade_session_cache['base_url']
 
     oauth_token, oauth_token_secret = authorize_etrade(force_new=force_new)
     if not oauth_token or not oauth_token_secret:
@@ -189,6 +196,11 @@ def get_etrade_session(force_new=False):
         resource_owner_secret=oauth_token_secret
     )
     base_url = prod_base_url
+    # Cache for reuse
+    _etrade_session_cache['session'] = session
+    _etrade_session_cache['base_url'] = base_url
+    _etrade_session_cache['token'] = oauth_token
+    _etrade_session_cache['secret'] = oauth_token_secret
     return session, base_url
 
 def fetch_etrade_market_data(tickers, retry=True):
@@ -202,6 +214,8 @@ def fetch_etrade_market_data(tickers, retry=True):
 
     status = None
     global session, base_url  # Ensure we update the global session/base_url
+    # Debug: print current session and base_url
+    print(f"[DEBUG] fetch_etrade_market_data: session={{session if 'session' in globals() else None}}, base_url={{base_url if 'base_url' in globals() else None}}")
     print("Tickers to fetch market data for 1926:", tickers)
     def _pull_market_data(session, base_url, tickers):
         all_market_data = []
@@ -256,20 +270,37 @@ def fetch_etrade_market_data(tickers, retry=True):
         return pd.DataFrame(all_market_data), 200
 
     # Get session and base_url if not already set
-    try:
-        session
-        base_url
-    except NameError:
-        session, base_url = get_etrade_session()
+    # Always use cached session unless a 401 triggers a refresh
+    from etrade_auth import get_etrade_session as _get_etrade_session
+    global session, base_url
+    session, base_url = _get_etrade_session()
+
 
     df_market, status = _pull_market_data(session, base_url, tickers)
     if status == 401 and retry:
         print("❌ 401 Unauthorized: OAuth token expired. Refreshing token...")
+        # Refresh token and create a new session, update globals
         session, base_url = get_etrade_session(force_new=True)
+        globals()['session'] = session
+        globals()['base_url'] = base_url
+        # Debug: print new session and token info
+        try:
+            from etrade_auth import load_tokens
+            oauth_token, oauth_token_secret = load_tokens()
+            print(f"[DEBUG] Loaded new tokens after refresh: oauth_token={oauth_token}, oauth_token_secret={oauth_token_secret}")
+        except Exception as e:
+            print(f"[DEBUG] Could not load tokens after refresh: {e}")
+        print(f"[DEBUG] New session after token refresh: session={{session}}, base_url={{base_url}}")
+        # Wait briefly to ensure file flush
+        import time
+        time.sleep(1)
+        # Retry with new session (guaranteed to use new token)
         df_market, status = _pull_market_data(session, base_url, tickers)
         if status == 401:
+            print("[DEBUG] Still getting 401 after token refresh. Token may not be saving/loading correctly.")
             raise Exception("❌ Failed to refresh OAuth token. Please re-authorize manually.")
     elif status == 401:
+        print("[DEBUG] 401 error with no retry. Not refreshing token.")
         raise Exception("❌ Failed to refresh OAuth token. Please re-authorize manually.")
 
     if df_market is None:

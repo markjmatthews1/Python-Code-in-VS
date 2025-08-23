@@ -1,0 +1,99 @@
+# Wishlist Tracker App - Development Plan
+
+## App Purpose
+Track a list of prominent stocks and ETFs, fetch real-time prices and 52-week highs, and analyze put option chains to find excellent premiums (e.g., premium > $1, strike > current price, strike < 52-week high) using Schwab and E*TRADE data. The app should help identify high-premium put opportunities for stocks/ETFs that are down for reasons other than bad earnings/guidance.
+
+---
+
+## Step-by-Step Development Plan
+
+### 1. Project Setup
+- [x] Create project folder structure (data, models, utils, tests, etc.)
+- [x] Add requirements.txt and README.md
+
+### 2. Core Data Models & Utilities
+- [ ] Implement `Instrument` model (symbol, name, 52wk high, current price)
+- [ ] Implement watchlist manager (load/save watchlist)
+- [ ] Implement price/premium analysis utilities
+
+### 3. Data Fetching Modules
+- [ ] Implement Schwab API integration (real-time price, 52wk high, option chain)
+- [ ] Implement E*TRADE API integration (real-time price, 52wk high, option chain)
+- [ ] Implement option premium analysis logic
+
+### 4. Business Logic
+- [ ] Logic to filter for excellent put premiums (premium > $1, strike > current, strike < 52wk high)
+- [ ] Logic to ignore stocks/ETFs with bad earnings/guidance (manual or automated flag)
+
+### 5. User Interface
+- [ ] CLI or Dash web UI to:
+    - View and edit watchlist
+    - Display real-time prices, 52wk highs
+    - Show filtered put opportunities
+    - Mark/flag reasons for price drops
+
+### 6. Testing
+- [ ] Unit tests for premium logic and data fetchers
+- [ ] Integration tests for end-to-end workflow
+
+### 7. Documentation & Daily Review
+- [ ] Update README with usage and setup
+- [ ] Maintain this plan as a living document, checking off steps as completed
+- [ ] Review progress daily and adjust plan as needed
+
+---
+
+## Notes
+- Start with CLI for speed, then add Dash UI if desired
+- Use stubs/mocks for API calls until real credentials/data are available
+- Prioritize core logic and data flow before UI polish
+
+---
+
+🧠 Ground Rules:
+- Everything gets coded 1 step at a time ✅
+- Clear placement and full code replacements for updates or bug fixes ✅
+- Well-documented code with labeled sections and functions ✅
+- No partial code fixes or vague comments like "existing code..." ✅
+- No NaN, NaN strings, or 0.0 values—use blank fields instead ✅
+- Headers are bold, boxed cells, totals clearly identified ✅
+- Font size must be legible (Arial 12 preferred) ✅
+- All money should be formatted as currency
+- no more than 2 decimals in mumerical displays
+- Minimize character count in code to avoid Copilot truncation ✅
+- Use a dedicated workspace so all files/modules pertain to this app ✅
+- Provisions for foggy days and rabbit hole avoidance ✅
+- Maintain a bullet-point file that updates daily to avoid re-explaining everything ✅
+- All gui's and popups should be colorful 
+
+
+---
+
+## Progress Update (2025-08-16)
+
+### What We Accomplished Today
+- Integrated E*TRADE authentication and improved token refresh logic (refresh only on 401 errors).
+- Built modular utilities for fetching and analyzing option chains, with advanced filtering for optimal sold puts (using premium-per-day metric, $5–$10 range, and next available above/below strikes).
+- Created a Tkinter GUI dashboard for ticker management and analytics display, including:
+    - Real-time prices, 52-week highs, and best put opportunities.
+    - Display of target put and next available strikes above/below.
+    - Added columns for Entry Price, Exit Price, and Stop Loss for uptrend/tradable signals.
+    - Improved layout, formatting, and column visibility (wider window, legible font, currency formatting).
+- Developed a technicals module (SMA, EMA, RSI, MACD, Fibonacci, Pivot Points) and config file for indicator parameters.
+- Integrated Schwab 1-min OHLCV data for technicals/trend signals, with correct handling for weekends/holidays.
+- Ensured all columns (including technicals and trade signals) are visible and actionable in the dashboard.
+
+### Current Status
+- The app is modular, testable, and supports real E*TRADE and Schwab data.
+- GUI dashboard displays all required analytics, technicals, and trade management columns.
+- Filtering and analytics logic matches the intended trading strategy.
+- Technicals and trade signals are calculated and displayed for each ticker.
+
+### Next Steps
+- User to test dashboard and confirm that all analytics, technicals, and trade columns display as expected.
+- Refine analytics or display logic based on user feedback (if needed).
+- Add/expand unit and integration tests for technicals, option analytics, and data fetchers.
+- Consider adding more advanced trade management features (alerts, logging, export, etc.).
+- Continue updating documentation and this plan as progress is made.
+
+_Last updated: 2025-08-16_

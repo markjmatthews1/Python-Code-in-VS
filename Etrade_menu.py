@@ -26,10 +26,10 @@ APPS = [
         "bg": "#2196F3"
     },
     {
-        "label": "Run Dividend Tracker (Core Only)",
-        "command": [VENV_PYTHON, os.path.join("modules", "estimated_income_tracker.py"), "--api", "--portfolio", "--comprehensive"],
-        "cwd": DIVIDEND_TRACKER_PATH,
-        "bg": "#8BC34A"
+        "label": "Wishlist Tracker Dashboard",
+        "command": [VENV_PYTHON, os.path.join("wishlist_tracker", "gui", "dashboard_gui.py")],
+        "cwd": os.getcwd(),
+        "bg": "#1976D2"
     },
     {
         "label": "Update Ticker Analysis",

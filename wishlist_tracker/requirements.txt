@@ -1,0 +1,6 @@
+# requirements.txt
+# Add your dependencies here
+
+dash
+requests
+pandas
