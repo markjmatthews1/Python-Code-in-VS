@@ -59,6 +59,7 @@ class ETRADEAccountAPI:
     def get_account_positions(self, account_id_key):
         """Get all positions for a specific account"""
         try:
+            # Use the working portfolio endpoint (positions endpoint returns 404)
             url = f"{self.base_url}/v1/accounts/{account_id_key}/portfolio.json"
             response = self.session.get(url)
             
@@ -72,6 +73,7 @@ class ETRADEAccountAPI:
                 return None
                 
             data = response.json()
+            # Use the working response structure for portfolio endpoint
             positions = data.get('PortfolioResponse', {}).get('AccountPortfolio', [])
             
             if positions and len(positions) > 0:
@@ -87,6 +89,69 @@ class ETRADEAccountAPI:
             return None
     
     def get_dividend_estimates(self):
+        """
+        Get dividend estimates by pulling positions for each account
+        """
+        print("📊 Getting dividend estimates from E*TRADE...")
+        
+        # Get list of accounts
+        accounts = self.get_account_list()
+        if not accounts:
+            print("❌ No accounts found")
+            return {}
+        
+        all_estimates = {}
+        
+        for account in accounts:
+            account_id = account['accountIdKey']
+            account_name = account.get('accountName', 'Unknown')
+            account_type = account.get('accountType', 'Unknown')
+            
+            print(f"\n📂 Processing {account_name} ({account_type})")
+            
+            # Get positions for this account
+            positions = self.get_account_positions(account_id)
+            if positions:
+                account_estimates = []
+                for position in positions:
+                    # Extract position data and estimate dividend
+                    symbol = position.get('symbolDescription', '')
+                    quantity = position.get('quantity', 0)
+                    if quantity > 0:
+                        # This would connect to dividend API to get estimates
+                        # For now, placeholder
+                        account_estimates.append({
+                            'symbol': symbol,
+                            'quantity': quantity
+                        })
+                
+                all_estimates[f"{account_name}_{account_type}"] = account_estimates
+        
+        return all_estimates
+    
+    def get_account_balance(self, account_id_key):
+        """Get account balance/value information - calculate from positions since balance API has 500 errors"""
+        try:
+            # Balance API is currently returning 500 errors, so calculate from positions
+            print(f"� Calculating account value from positions...")
+            
+            positions = self.get_account_positions(account_id_key)
+            if not positions:
+                print(f"❌ No positions found for account {account_id_key}")
+                return 0.0
+            
+            total_value = 0.0
+            for position in positions:
+                market_value = position.get('marketValue', 0)
+                if market_value:
+                    total_value += float(market_value)
+            
+            print(f"📊 Account Total Value: ${total_value:,.2f}")
+            return total_value
+            
+        except Exception as e:
+            print(f"❌ Error calculating account balance: {e}")
+            return 0.0
         """
         Get dividend estimates from all accounts
         Returns data in the same format as the Excel file processing

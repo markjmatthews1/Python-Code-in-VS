@@ -26,8 +26,8 @@ request_token_url = prod_base_url + "/oauth/request_token"
 authorize_url = "https://us.etrade.com/e/t/etws/authorize"
 access_token_url = prod_base_url + "/oauth/access_token"
 
-# Auth storage file
-auth_file_path = os.path.join(os.path.dirname(__file__), "..", "auth_data.json")
+# Auth storage file - USE SHARED TOKENS from main directory
+auth_file_path = "C:/Users/mjmat/Python Code in VS/auth_data.json"
 
 def save_tokens(oauth_token, oauth_token_secret):
     """ Store OAuth tokens in a JSON file with today's date. """

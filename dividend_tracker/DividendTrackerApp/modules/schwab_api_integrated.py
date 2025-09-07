@@ -288,10 +288,10 @@ class SchwabAPI:
             
             if not portfolio_values:
                 print("⚠️ No balance data found in accounts response, using fallback approach")
-                # If no balances found in accounts response, use hardcoded known values
+                # NO MORE HARDCODED VALUES - Return zeros if API fails
                 portfolio_values = {
-                    'Schwab IRA': 49951.00,
-                    'Schwab Individual': 1605.60
+                    'Schwab IRA': 0.00,        # No hardcoded values - API integration required
+                    'Schwab Individual': 0.00  # No hardcoded values - API integration required
                 }
                 total_value = sum(portfolio_values.values())
             

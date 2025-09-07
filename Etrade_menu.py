@@ -8,17 +8,28 @@ DIVIDEND_TRACKER_PATH = r"c:\Users\mjmat\Python Code in VS\dividend_tracker\Divi
 VENV_PYTHON = sys.executable  # Uses your virtual environment or system Python
 
 # Launch function with working directory override
-def run_app(command, cwd=None):
-    subprocess.Popen(command, cwd=cwd if cwd else os.getcwd())
+def run_app(command, cwd=None, new_terminal=False):
+    if new_terminal:
+        # Build the command string for Windows new terminal
+        cmd_str = ' '.join(f'"{arg}"' if ' ' in str(arg) else str(arg) for arg in command)
+        subprocess.Popen(f'start cmd /k {cmd_str}', cwd=cwd if cwd else os.getcwd(), shell=True)
+    else:
+        subprocess.Popen(command, cwd=cwd if cwd else os.getcwd())
 
 # Define apps and commands
 APPS = [
     # --- Dividend Tools ---
     {
-        "label": "🚀 Complete System Update (Weekend)",
-        "command": [VENV_PYTHON, "complete_system_update.py"],
+        "label": "🚀 Complete System Update (WORKING - Append Only)",
+        "command": [VENV_PYTHON, "proper_excel_updater.py"],
         "cwd": DIVIDEND_TRACKER_PATH,
         "bg": "#4CAF50"
+    },
+    {
+        "label": "💰 Update Portfolio Values (REAL API)",
+        "command": [VENV_PYTHON, "enhanced_portfolio_updater_with_schwab.py"],
+        "cwd": DIVIDEND_TRACKER_PATH,
+        "bg": "#1976D2"
     },
     {
         "label": "Update Dividend Sheet",
@@ -29,7 +40,8 @@ APPS = [
         "label": "Wishlist Tracker Dashboard",
         "command": [VENV_PYTHON, os.path.join("wishlist_tracker", "gui", "dashboard_gui.py")],
         "cwd": os.getcwd(),
-        "bg": "#1976D2"
+        "bg": "#1976D2",
+        "new_terminal": True
     },
     {
         "label": "Update Ticker Analysis",
@@ -47,7 +59,8 @@ APPS = [
     {
         "label": "Run Dashboard (day.py)",
         "command": [VENV_PYTHON, "day.py"],
-        "bg": "#4CAF50"
+        "bg": "#4CAF50",
+        "new_terminal": True
     },
     {
         "label": "Market Quote",
@@ -101,7 +114,7 @@ for app in APPS:
         font=("Arial", 14),
         bg=app["bg"],
         fg="white",
-        command=lambda cmd=app["command"], cwd=app.get("cwd"): run_app(cmd, cwd)
+        command=lambda cmd=app["command"], cwd=app.get("cwd"), new_term=app.get("new_terminal", False): run_app(cmd, cwd, new_term)
     )
     btn.pack(pady=10, fill="x", padx=40)
 

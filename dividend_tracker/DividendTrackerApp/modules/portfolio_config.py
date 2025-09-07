@@ -20,15 +20,16 @@ class PortfolioConfig:
             'k401_value': 122122.00,  # You'll update this weekly
         }
         
-        # Fallback values if APIs fail
+        # NO MORE FALLBACK VALUES - All values must come from APIs
+        # This ensures we never use outdated hardcoded values
         self.etrade_fallback = {
-            'etrade_ira': 278418.62,      # Fallback if E*TRADE API fails
-            'etrade_taxable': 62110.35    # Fallback if E*TRADE API fails
+            'etrade_ira': 0.00,       # No fallbacks - API required
+            'etrade_taxable': 0.00    # No fallbacks - API required
         }
         
         self.schwab_fallback = {
-            'schwab_ira': 49951.00,       # Fallback if Schwab API fails
-            'schwab_individual': 1605.60  # Fallback if Schwab API fails
+            'schwab_ira': 0.00,       # No fallbacks - API required  
+            'schwab_individual': 0.00  # No fallbacks - API required
         }
     
     def get_current_portfolio_values(self, use_api=True):

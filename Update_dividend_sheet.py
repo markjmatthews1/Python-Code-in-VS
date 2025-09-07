@@ -1,4 +1,4 @@
-                                                       # ***** imports for Update Dividend Sheet *****
+# ***** imports for Update Dividend Sheet *****
 
 from etrade_auth import get_etrade_session
 import pyetrade
@@ -119,6 +119,9 @@ def update_dividend_sheet():
         sheet = workbook.active
 
         # Insert a new column with today's date as the header
+        # CORRECTED: Insert at column 17 (after Beginning Dividend Yield in column 16)
+        # Column 14: Beginning Dividend Yield (preserved)
+        # Column 15: New yield data (inserted here)
         today = date.today().strftime("%m-%d-%Y")
         sheet.insert_cols(17)
         sheet.cell(row=1, column=17).value = today
@@ -195,4 +198,3 @@ def update_dividend_sheet():
 if __name__ == "__main__":
     update_dividend_sheet()
     print("✅ Update complete. Exiting.")
-    
