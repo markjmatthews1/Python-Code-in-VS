@@ -36,6 +36,7 @@ class ProperExcelUpdater:
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.outputs_dir = os.path.join(self.script_dir, "outputs")
         self.excel_file = os.path.join(self.outputs_dir, "Dividends_2025.xlsx")
+        self.cache_file = os.path.join(self.script_dir, "portfolio_data_cache.json")
         self.today = datetime.now()
         self.today_str = self.today.strftime("%Y-%m-%d")
     
@@ -123,6 +124,13 @@ class ProperExcelUpdater:
         else:
             print("   ❌ Estimated Income 2025: Failed")
             
+        # Update Accounts Div historical yield sheet (NEW!)
+        if self.update_historical_yield_sheet():
+            print("   ✅ Accounts Div historical yield: New column added with color coding")
+            success_count += 1
+        else:
+            print("   ❌ Accounts Div historical yield: Failed")
+            
         # Update other sheets safely
         if self.update_other_sheets_safely(fresh_data):
             print("   ✅ Other sheets: Updated safely")
@@ -130,10 +138,10 @@ class ProperExcelUpdater:
         else:
             print("   ❌ Other sheets: Some issues")
         
-        print(f"\n🎯 RESULTS: {success_count}/3 components updated")
+        print(f"\n🎯 RESULTS: {success_count}/4 components updated")
         
-        if success_count >= 2:
-            print("✅ SUCCESS: Key time-series sheets updated!")
+        if success_count >= 3:
+            print("✅ SUCCESS: Key sheets updated including historical yields!")
             return True
         else:
             print("❌ PARTIAL: Some updates may need attention")
@@ -247,7 +255,7 @@ class ProperExcelUpdater:
                 'E*TRADE Taxable': portfolio_values.get('E*TRADE Taxable', 0),
                 'Schwab IRA': portfolio_values.get('Schwab IRA', 0),
                 'Schwab Individual': portfolio_values.get('Schwab Individual', 0),
-                '401K': k401_value  # Include 401K value
+                '401k Retirement (Manual)': k401_value  # Match exact Excel label
             }
             
             # Find and update account rows with color coding (rows 4-9)
@@ -261,14 +269,17 @@ class ProperExcelUpdater:
                     if account_key in account_mapping:
                         value = account_mapping[account_key]
                     elif 'total' in account_key.lower():
-                        # Calculate total for Total row
-                        value = sum(portfolio_values.values()) + k401_value
-                    elif any(partial in account_key for partial in ['E*TRADE', 'Etrade', 'Schwab', '401K']):
+                        # Calculate total for Total row - 401K is already included in portfolio_values
+                        value = sum(portfolio_values.values())
+                    elif any(partial in account_key for partial in ['E*TRADE', 'Etrade', 'Schwab']):
                         # Handle variations in account names
                         for map_key, map_value in account_mapping.items():
                             if map_key.replace('*', '') in account_key or map_key in account_key:
                                 value = map_value
                                 break
+                    elif '401k' in account_key.lower() or '401' in account_key:
+                        # Handle 401k variations
+                        value = k401_value
                     
                     if value is not None:
                         cell = ws.cell(row=row, column=new_col, value=value)
@@ -282,7 +293,7 @@ class ProperExcelUpdater:
                         print(f"      💰 {account_key}: ${value:,.2f} (Color coded)")
             
             # Legacy total calculation for older rows (kept for compatibility)
-            total_portfolio = sum(portfolio_values.values()) + k401_value
+            total_portfolio = sum(portfolio_values.values())  # 401K already included in portfolio_values
             for row in range(10, ws.max_row + 1):
                 account_name = ws.cell(row=row, column=1).value
                 if account_name and 'total' in str(account_name).lower():
@@ -399,7 +410,7 @@ class ProperExcelUpdater:
                 cell = ws.cell(row=monthly_row, column=new_col)
                 cell.value = formula
                 cell.number_format = FORMAT_CURRENCY_USD_SIMPLE
-                cell.font = Font(name='Arial', size=12)
+                cell.font = Font(name='Arial', size=12, bold=True)  # Make Monthly Average bold
                 
                 # For formulas, save first to calculate the value, then apply color coding
                 wb.save(self.excel_file)
@@ -407,22 +418,40 @@ class ProperExcelUpdater:
                 wb = openpyxl.load_workbook(self.excel_file)
                 ws = wb["Estimated Income 2025"]
                 
-                calculated_value = ws.cell(row=monthly_row, column=new_col).value
-                if isinstance(calculated_value, (int, float)):
+                # Manual calculation for reliable color coding comparison
+                # Sum dividend values in rows 4-7 of the new column, then divide by 12
+                current_sum = 0
+                for row in range(4, 8):  # Rows 4-7 (dividend accounts)
+                    cell_value = ws.cell(row=row, column=new_col).value
+                    if isinstance(cell_value, (int, float)):
+                        current_sum += cell_value
+                
+                calculated_value = current_sum / 12 if current_sum > 0 else 0
+                
+                if calculated_value > 0:
                     account_name = ws.cell(row=monthly_row, column=1).value
                     account_key = str(account_name).strip() if account_name else "Monthly"
-                    old_value = previous_values.get(account_key, None)
                     
-                    # Reapply formatting with color coding
+                    # Get previous monthly average for comparison
+                    old_value = None
+                    if new_col > 1:
+                        prev_sum = 0
+                        for row in range(4, 8):
+                            prev_cell_value = ws.cell(row=row, column=new_col - 1).value
+                            if isinstance(prev_cell_value, (int, float)):
+                                prev_sum += prev_cell_value
+                        old_value = prev_sum / 12 if prev_sum > 0 else None
+                    
+                    # Reapply formatting with color coding and bold
                     cell = ws.cell(row=monthly_row, column=new_col)
                     cell.value = formula
                     cell.number_format = FORMAT_CURRENCY_USD_SIMPLE
-                    cell.font = Font(name='Arial', size=12)
+                    cell.font = Font(name='Arial', size=12, bold=True)  # Keep bold after color coding
                     self.apply_color_coding(cell, calculated_value, old_value)
                     
-                    print(f"      🧮 Monthly Average: {formula} = ${calculated_value:,.2f} (Color coded)")
+                    print(f"      🧮 Monthly Average: {formula} = ${calculated_value:,.2f} (Bold & Color coded)")
                 else:
-                    print(f"      🧮 Monthly Average: {formula}")
+                    print(f"      🧮 Monthly Average: {formula} (Bold formatting)")
             
             # Add total dividends with color coding
             total_dividends = fresh_data.get('totals', {}).get('total_yearly_dividends', 0)
@@ -454,6 +483,38 @@ class ProperExcelUpdater:
             
         except Exception as e:
             print(f"      ❌ Estimated Income update error: {e}")
+            traceback.print_exc()
+            return False
+            
+    def update_historical_yield_sheet(self):
+        """Update Accounts Div historical yield sheet using cache data"""
+        try:
+            print("   📊 Updating historical yield sheet from cache...")
+            
+            # Import and run the cache-based historical yield updater
+            import subprocess
+            import sys
+            
+            # Run the dedicated historical yield updater
+            updater_script = os.path.join(self.script_dir, "cache_historical_yield_updater.py")
+            
+            if not os.path.exists(updater_script):
+                print(f"      ❌ Historical yield updater not found: {updater_script}")
+                return False
+            
+            # Run the updater as a subprocess to avoid import conflicts
+            result = subprocess.run([sys.executable, updater_script], 
+                                  capture_output=True, text=True, cwd=self.script_dir)
+            
+            if result.returncode == 0:
+                print("   ✅ Historical yield sheet updated successfully")
+                return True
+            else:
+                print(f"   ❌ Historical yield updater failed: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            print(f"   ❌ Historical yield update error: {e}")
             traceback.print_exc()
             return False
             
