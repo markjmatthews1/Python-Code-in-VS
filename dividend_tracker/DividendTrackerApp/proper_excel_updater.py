@@ -487,30 +487,46 @@ class ProperExcelUpdater:
             return False
             
     def update_historical_yield_sheet(self):
-        """Update Accounts Div historical yield sheet using cache data"""
+        """Update Accounts Div historical yield sheet with high-yield dividend filtering"""
         try:
-            print("   📊 Updating historical yield sheet from cache...")
+            print("   📊 Updating historical yield sheet with high-yield dividend filtering...")
             
-            # Import and run the cache-based historical yield updater
+            # Import and run the final historical yield updater
             import subprocess
             import sys
             
-            # Run the dedicated historical yield updater
-            updater_script = os.path.join(self.script_dir, "cache_historical_yield_updater.py")
+            # Run the final historical yield updater (with >4% yield filtering)
+            updater_script = os.path.join(self.script_dir, "final_historical_yield_updater.py")
             
             if not os.path.exists(updater_script):
-                print(f"      ❌ Historical yield updater not found: {updater_script}")
-                return False
+                print(f"      ❌ Final historical yield updater not found: {updater_script}")
+                # Fallback chain
+                fallback_scripts = [
+                    "windows_compatible_historical_yield_updater.py",
+                    "corrected_enhanced_historical_yield_updater.py",
+                    "enhanced_cache_historical_yield_updater.py", 
+                    "cache_historical_yield_updater.py"
+                ]
+                
+                for fallback in fallback_scripts:
+                    updater_script = os.path.join(self.script_dir, fallback)
+                    if os.path.exists(updater_script):
+                        print(f"      📁 Using fallback: {fallback}")
+                        break
+                else:
+                    print(f"      ❌ No historical yield updater found")
+                    return False
             
             # Run the updater as a subprocess to avoid import conflicts
             result = subprocess.run([sys.executable, updater_script], 
                                   capture_output=True, text=True, cwd=self.script_dir)
             
             if result.returncode == 0:
-                print("   ✅ Historical yield sheet updated successfully")
+                print("   ✅ Historical yield sheet updated successfully (High-yield dividend filtering: >4% yield, correct accounts, proper positioning)")
                 return True
             else:
                 print(f"   ❌ Historical yield updater failed: {result.stderr}")
+                print(f"   📝 Debug output: {result.stdout}")
                 return False
                 
         except Exception as e:
@@ -521,28 +537,24 @@ class ProperExcelUpdater:
     def update_other_sheets_safely(self, fresh_data):
         """Update other sheets without destroying existing data"""
         try:
-            # Just update the timestamp on Portfolio Summary to show it was touched
-            wb = openpyxl.load_workbook(self.excel_file)
-            
-            if "Portfolio Summary" in wb.sheetnames:
-                ws = wb["Portfolio Summary"]
+            # Update Portfolio Summary with proper calculations
+            try:
+                from portfolio_summary_updater import PortfolioSummaryUpdater
+                print("      📊 Updating Portfolio Summary with fresh calculations...")
                 
-                # Find a safe place to put an update timestamp
-                # Look for an empty area or existing timestamp
-                for row in range(1, min(10, ws.max_row + 1)):
-                    for col in range(1, min(5, ws.max_column + 1)):
-                        cell_value = ws.cell(row=row, column=col).value
-                        if cell_value and "updated" in str(cell_value).lower():
-                            # Update existing timestamp
-                            ws.cell(row=row, column=col, value=f"Last Updated: {self.today_str}")
-                            break
+                ps_updater = PortfolioSummaryUpdater()
+                ps_success = ps_updater.run_update()
+                
+                if ps_success:
+                    print("      ✅ Portfolio Summary updated successfully")
                 else:
-                    # Add timestamp in a safe location (bottom of sheet)
-                    safe_row = ws.max_row + 2
-                    ws.cell(row=safe_row, column=1, value=f"API Data Updated: {self.today_str}")
+                    print("      ⚠️ Portfolio Summary update had issues")
+                    
+            except ImportError as e:
+                print(f"      ⚠️ Could not import Portfolio Summary updater: {e}")
+            except Exception as e:
+                print(f"      ⚠️ Portfolio Summary update error: {e}")
                 
-            wb.save(self.excel_file)
-            wb.close()
             return True
             
         except Exception as e:

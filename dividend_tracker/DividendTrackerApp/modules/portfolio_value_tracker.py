@@ -73,43 +73,23 @@ class PortfolioValueTracker:
             return {}
     
     def get_account_balance(self, account_id_key):
-        """Get account balance - try balance API first, then calculate from positions"""
+        """Get account balance - use API method directly"""
         try:
-            # Try to get the actual balance from E*TRADE API
-            balances = self.api.get_account_balance(account_id_key)
+            # Get the actual balance from E*TRADE API
+            net_value = self.api.get_account_balance(account_id_key)
             
-            if balances and balances.get('netAccountValue'):
-                net_value = float(balances['netAccountValue'])
+            if net_value and net_value > 0:
                 print(f"    💰 Net Account Value (from API): ${net_value:,.2f}")
                 return net_value
             else:
-                print("    ⚠️ Balance API didn't return netAccountValue, using current values...")
-                # Use the actual current values from your screenshot (August 3, 2025)
-                current_values = {
-                    'fOTHyxD-9tctDlNfYkhFzA': 275522.27,  # Rollover IRA from screenshot
-                    'KdLoXe9uuGmiLrZmvOcokw': 61135.39,   # Individual Brokerage from screenshot
-                }
-                
-                if account_id_key in current_values:
-                    net_value = current_values[account_id_key]
-                    print(f"    💰 Net Account Value (current): ${net_value:,.2f}")
-                    return net_value
-                else:
-                    print(f"    🔄 Unknown account {account_id_key}, calculating from positions...")
-                    return self.calculate_from_positions(account_id_key)
+                print(f"    ⚠️ Balance API returned zero or None, using fallback calculation...")
+                return self.calculate_from_positions(account_id_key)
             
         except Exception as e:
-            print(f"    ⚠️ Balance API failed ({e}), using current values...")
-            # Fallback to current values
-            current_values = {
-                'fOTHyxD-9tctDlNfYkhFzA': 275522.27,  # Rollover IRA
-                'KdLoXe9uuGmiLrZmvOcokw': 61135.39,   # Individual Brokerage
-            }
-            
-            if account_id_key in current_values:
-                return current_values[account_id_key]
-            else:
-                return self.calculate_from_positions(account_id_key)
+            print(f"    ⚠️ Balance API failed ({e}), cannot get balance without API")
+            # NO MORE HARDCODED VALUES - Return 0 if API fails
+            print(f"    ❌ No fallback values - API integration required")
+            return 0.00
     
     def calculate_from_positions(self, account_id_key):
         """Calculate account value from individual positions (fallback method)"""

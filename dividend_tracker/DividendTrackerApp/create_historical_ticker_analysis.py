@@ -27,7 +27,7 @@ def create_comprehensive_ticker_tracker():
     Create comprehensive automated ticker tracking system
     """
     
-    print("🚀 Creating Comprehensive Automated Ticker Tracker...")
+    print(">> Creating Comprehensive Automated Ticker Tracker...")
     print("=" * 60)
     
     # File paths
@@ -46,16 +46,16 @@ def create_comprehensive_ticker_tracker():
     # Step 4: Add yield tracking and color coding
     add_yield_tracking_system(output_file)
     
-    print("✅ Comprehensive ticker tracker created!")
+    print("-> Comprehensive ticker tracker created!")
 
 def load_ticker_reference_data(data_file):
     """
     Load existing ticker structure from dividend_stocks.xlsx
     """
-    print("📊 Loading ticker reference structure...")
+    print("-> Loading ticker reference structure...")
     
     if not os.path.exists(data_file):
-        print(f"   ⚠️ {data_file} not found. Please copy dividend_stocks.xlsx to data/ folder")
+        print(f"   -> {data_file} not found. Please copy dividend_stocks.xlsx to data/ folder")
         
         # Create sample structure based on the data you provided
         sample_tickers = {
@@ -108,11 +108,11 @@ def load_ticker_reference_data(data_file):
                     'payment_cycle': str(row.get('Payment cycle', 'Monthly'))
                 }
         
-        print(f"   📊 Loaded {len(ticker_structure)} tickers from file")
+        print(f"   -> Loaded {len(ticker_structure)} tickers from file")
         return ticker_structure
         
     except Exception as e:
-        print(f"   ❌ Error loading ticker data: {e}")
+        print(f"   -> Error loading ticker data: {e}")
         return {}
 
 def get_live_ticker_data():
@@ -120,7 +120,7 @@ def get_live_ticker_data():
     Placeholder for live data integration
     This will eventually connect to the existing Update_dividend_sheet.py logic
     """
-    print("🔌 Getting live ticker data...")
+    print(">> Getting live ticker data...")
     
     # For now, return sample live data
     # This will be replaced with actual API calls
@@ -137,7 +137,7 @@ def get_live_ticker_data():
         'EIC': {'current_price': 13.66, 'change': -0.04, 'change_pct': -0.25, 'yield': 15.23, 'dividend_amount': 0.13}
     }
     
-    print(f"   📈 Retrieved data for {len(live_data)} tickers")
+    print(f"   -> Retrieved data for {len(live_data)} tickers")
     return live_data
 
 def create_enhanced_ticker_sheet(ticker_structure, live_data, output_file):
@@ -331,16 +331,16 @@ def create_enhanced_ticker_sheet(ticker_structure, live_data, output_file):
     # Save workbook
     wb.save(output_file)
     
-    print(f"✅ Enhanced ticker sheet created with {len(ticker_structure)} positions")
-    print(f"   📊 Total Current Value: ${totals['current_value']:,.2f}")
-    print(f"   📊 Total Monthly Dividend: ${totals['monthly_dividend']:,.2f}")
-    print(f"   📊 Total Annual Dividend: ${totals['annual_dividend']:,.2f}")
+    print(f"-> Enhanced ticker sheet created with {len(ticker_structure)} positions")
+    print(f"   -> Total Current Value: ${totals['current_value']:,.2f}")
+    print(f"   -> Total Monthly Dividend: ${totals['monthly_dividend']:,.2f}")
+    print(f"   -> Total Annual Dividend: ${totals['annual_dividend']:,.2f}")
 
 def add_yield_tracking_system(output_file):
     """
     Add historical yield tracking system (similar to your current sheet)
     """
-    print("📈 Adding yield tracking system...")
+    print("-> Adding yield tracking system...")
     
     # This would add date columns for yield tracking over time
     # Similar to your current 07-19-2025, 07-12-2025, etc. columns
@@ -357,7 +357,7 @@ def add_yield_tracking_system(output_file):
     ws.cell(row=note_row + 4, column=1, value="• Updates automatically with each run")
     
     wb.save(output_file)
-    print("   ✅ Yield tracking system added")
+    print("   -> Yield tracking system added")
 
 if __name__ == "__main__":
     create_comprehensive_ticker_tracker()
