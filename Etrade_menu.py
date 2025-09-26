@@ -5,6 +5,7 @@ import sys
 
 # Path to DividendTrackerApp
 DIVIDEND_TRACKER_PATH = r"c:\Users\mjmat\Python Code in VS\dividend_tracker\DividendTrackerApp"
+PRICE_TRACKER_PATH = r"c:\Users\mjmat\Python Code in VS\price_tracker"
 VENV_PYTHON = sys.executable  # Uses your virtual environment or system Python
 
 # Launch function with working directory override
@@ -20,16 +21,16 @@ def run_app(command, cwd=None, new_terminal=False):
 APPS = [
     # --- Dividend Tools ---
     {
-        "label": "🚀 Complete System Update (WORKING - Append Only)",
+        "label": "🚀 Complete Portfolio/Dividend Update",
         "command": [VENV_PYTHON, "proper_excel_updater.py"],
         "cwd": DIVIDEND_TRACKER_PATH,
         "bg": "#4CAF50"
     },
     {
-        "label": "💰 Update Portfolio Values (REAL API)",
-        "command": [VENV_PYTHON, "enhanced_portfolio_updater_with_schwab.py"],
-        "cwd": DIVIDEND_TRACKER_PATH,
-        "bg": "#1976D2"
+        "label": "💰 Item Price Tracker",
+        "command": [VENV_PYTHON, "pt.py"],
+        "cwd": PRICE_TRACKER_PATH,
+        "bg": "#FF9800"
     },
     {
         "label": "Update Dividend Sheet",
@@ -40,14 +41,15 @@ APPS = [
         "label": "Wishlist Tracker Dashboard",
         "command": [VENV_PYTHON, os.path.join("wishlist_tracker", "gui", "dashboard_gui.py")],
         "cwd": os.getcwd(),
-        "bg": "#1976D2",
+        "bg": "#9C27B0",
         "new_terminal": True
     },
     {
-        "label": "Update Ticker Analysis",
-        "command": [VENV_PYTHON, "create_historical_ticker_analysis.py"],
-        "cwd": DIVIDEND_TRACKER_PATH,
-        "bg": "#FF9800"
+        "label": "🚀 Enhanced Day Trading System",
+        "command": [VENV_PYTHON, "main.py"],
+        "cwd": os.path.join(os.getcwd(), "enhanced_day_trader"),
+        "bg": "#00E676",
+        "new_terminal": True
     },
     {
         "label": "View Dividend Screener",
@@ -80,7 +82,7 @@ APPS = [
     {
         "label": "SSO SDS Trade Strategy",
         "command": [VENV_PYTHON, "SSO_SDS_Trade_Strategy.py"],
-        "bg": "#00BCD4"
+        "bg": "#4CAF50"
     },
 
     # --- Placeholder ---
@@ -94,7 +96,7 @@ APPS = [
 # ------------------- GUI Setup -------------------
 root = tk.Tk()
 root.title("Trading Application Menu")
-root.geometry("420x700")
+root.geometry("420x900")
 root.configure(bg="#222244")
 
 title = tk.Label(
