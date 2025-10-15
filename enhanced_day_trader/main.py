@@ -20,6 +20,7 @@ Date: September 26, 2025
 
 import os
 import sys
+import time
 import argparse
 from pathlib import Path
 
@@ -59,7 +60,7 @@ class EnhancedDayTrader:
         
         # Check authentication
         try:
-            quotes = self.auth_manager.get_schwab_quotes(['SPY'])
+            quotes = self.auth_manager.get_schwab_quotes(['XLK'])
             checks['auth_available'] = bool(quotes)
             if checks['auth_available']:
                 print("✅ Authentication: OK")
@@ -122,9 +123,10 @@ class EnhancedDayTrader:
         print("=" * 30)
         
         test_cases = [
-            ('SPY', 450.00),
-            ('QQQ', 380.00), 
-            ('TQQQ', 65.00)
+            ('XLK', 180.00),  # Technology Sector ETF
+            ('XLF', 45.00),   # Financial Sector ETF  
+            ('XLV', 160.00),  # Healthcare Sector ETF
+            ('XLE', 95.00)    # Energy Sector ETF
         ]
         
         for ticker, price in test_cases:
@@ -195,6 +197,35 @@ def main():
     if args.mode == 'demo':
         print(f"\n🎯 Running in DEMO mode with ${args.balance:,} account")
         print("Demo mode shows system capabilities without trading")
+        
+        # Start web dashboard in separate thread
+        try:
+            from dashboard import run_dashboard
+            import threading
+            
+            dashboard_thread = threading.Thread(target=lambda: run_dashboard(8051), daemon=True)
+            dashboard_thread.start()
+            print(f"\n🌐 Web dashboard available at: http://localhost:8051")
+            print("📊 Live trade signals will appear in the dashboard")
+            print("🎯 Open your browser to see real-time trade setups")
+            
+            # Keep system running 
+            print("\n🔄 System running... Press Ctrl+C to exit")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("💡 Monitor the dashboard for live trade opportunities!")
+            
+            try:
+                while True:
+                    time.sleep(30)
+                    current_time = datetime.now().strftime('%H:%M:%S')
+                    print(f"⏰ {current_time} - System active (check dashboard for signals)")
+                    
+            except KeyboardInterrupt:
+                print("\n⏹️  System shutdown requested...")
+                
+        except Exception as e:
+            print(f"⚠️  Dashboard error: {e}")
+            print("Continuing in basic demo mode...")
         
     elif args.mode == 'sim':
         trader.run_simulation_mode()

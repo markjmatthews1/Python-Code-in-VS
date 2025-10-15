@@ -1,0 +1,881 @@
+#!/usr/bin/env python3
+"""
+Enhanced Day Trader - Web Dashboard
+Provides real-time monitoring and control interface
+"""
+
+from flask import Flask, render_template, jsonify, request
+import json
+import logging
+from datetime import datetime
+import threading
+import time
+import sys
+import os
+import time
+import threading
+import asyncio
+from pathlib import Path
+from datetime import datetime
+
+# Add parent directory to path for imports
+sys.path.append(str(Path(__file__).parent.parent.absolute()))
+
+# Import live signals generator
+from live_signals import trade_signal_generator
+
+# Import paper trading engine for consistent data
+from core.paper_trader import paper_trader
+
+app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
+
+# Demo trading simulation variables
+demo_trades = []
+demo_start_balance = 10000.0
+demo_current_balance = demo_start_balance
+demo_daily_start = demo_start_balance
+
+# Global status variables
+system_status = {
+    'running': True,
+    'last_update': datetime.now().isoformat(),
+    'positions': 0,
+    'balance': demo_current_balance,
+    'win_rate': 0.0,
+    'total_trades': 0,
+    'daily_pnl': 0.0
+}
+
+positions_data = []
+performance_data = {
+    'original_system': {'win_rate': 24.0, 'risk_reward': '1:2'},
+    'enhanced_system': {'win_rate': 0.0, 'risk_reward': '2:1'}
+}
+
+# Live trade signals
+live_signals = []
+
+def simulate_demo_trade(signal):
+    """Simulate a demo trade execution based on signal"""
+    global demo_current_balance, demo_trades
+    
+    import random
+    import sys
+    import os
+    sys.path.append(os.path.dirname(__file__))
+    from core.risk_manager import EnhancedRiskManager
+    
+    # Use the proper risk manager for position sizing
+    risk_manager = EnhancedRiskManager(demo_current_balance)
+    entry_price = signal['entry_price']
+    stop_loss = signal['stop_loss']
+    target_price = signal['take_profit']  # Fixed: was 'target_price'
+    
+    # Calculate shares using proper risk management
+    position_calc = risk_manager.calculate_position_size(entry_price)
+    shares = position_calc['shares']
+    
+    # Don't trade if position is invalid
+    if shares == 0 or not position_calc['valid']:
+        return  # Skip this trade
+    
+    # Simulate trade outcome based on signal strength
+    signal_strength = signal.get('signal_strength', 0.3)
+    
+    # Higher signal strength = higher win probability
+    win_probability = min(0.45 + (signal_strength * 0.4), 0.85)  # 45-85% win rate
+    
+    is_winner = random.random() < win_probability
+    
+    if is_winner:
+        # Winner: hit target price
+        if signal['direction'] == 'BUY':
+            profit = (target_price - entry_price) * shares
+        else:
+            profit = (entry_price - target_price) * shares
+        outcome = 'WIN'
+    else:
+        # Loser: hit stop loss
+        if signal['direction'] == 'BUY':
+            profit = (stop_loss - entry_price) * shares
+        else:
+            profit = (entry_price - stop_loss) * shares
+        outcome = 'LOSS'
+    
+    # Update demo balance
+    demo_current_balance += profit
+    
+    # Record trade
+    trade_record = {
+        'symbol': signal['symbol'],
+        'direction': signal['direction'],
+        'entry_price': entry_price,
+        'exit_price': target_price if is_winner else stop_loss,
+        'shares': shares,
+        'profit': profit,
+        'outcome': outcome,
+        'timestamp': datetime.now().isoformat(),
+        'signal_strength': signal_strength
+    }
+    
+    demo_trades.append(trade_record)
+    
+    print(f"💰 Demo {outcome}: {signal['symbol']} {signal['direction']} "
+          f"{shares} shares = ${profit:.2f} (Balance: ${demo_current_balance:.2f})")
+    
+    return trade_record
+
+def update_demo_performance():
+    """Update demo performance metrics"""
+    global system_status
+    
+    if demo_trades:
+        wins = len([t for t in demo_trades if t['outcome'] == 'WIN'])
+        total_trades = len(demo_trades)
+        win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
+        
+        system_status['win_rate'] = win_rate
+        system_status['total_trades'] = total_trades
+        system_status['balance'] = demo_current_balance
+        system_status['daily_pnl'] = demo_current_balance - demo_daily_start
+        
+        print(f"📊 Demo Performance: {wins}/{total_trades} wins = {win_rate:.1f}% win rate")
+    else:
+        # No demo trades yet, show target performance during market hours
+        system_status['balance'] = demo_current_balance
+        system_status['daily_pnl'] = 0.0
+        system_status['win_rate'] = 0.0  # Start at 0% when no trades
+        system_status['total_trades'] = 0
+
+@app.route('/')
+def dashboard():
+    """Main dashboard page"""
+    return render_template('dashboard.html')
+
+@app.route('/api/status')
+def get_status():
+    """Get current system status"""
+    # Get real status from paper trading engine
+    summary = paper_trader.get_performance_summary()
+    status = {
+        'running': system_status['running'],
+        'last_update': datetime.now().isoformat(),
+        'positions': summary['active_positions'],
+        'balance': summary['current_balance'],
+        'win_rate': summary['win_rate'],
+        'total_trades': summary['total_trades'],
+        'daily_pnl': summary['today_pnl']
+    }
+    return jsonify(status)
+
+@app.route('/api/positions')
+def get_positions():
+    """Get current positions"""
+    # Get real positions from paper trading engine
+    positions = []
+    for trade in paper_trader.active_trades.values():
+        # Calculate unrealized P&L (simplified)
+        current_price = trade.open_price * 1.001  # Simulate small price movement
+        if trade.direction == 'LONG':
+            unrealized_pnl = (current_price - trade.open_price) * trade.quantity
+        else:
+            unrealized_pnl = (trade.open_price - current_price) * trade.quantity
+            
+        positions.append({
+            'ticker': trade.ticker,
+            'direction': trade.direction,
+            'quantity': trade.quantity,
+            'entry_price': trade.open_price,
+            'current_price': current_price,
+            'unrealized_pnl': unrealized_pnl,
+            'open_time': trade.open_time.isoformat()
+        })
+    return jsonify(positions)
+
+@app.route('/api/signals')
+def get_signals():
+    """Get current trade signals"""
+    return jsonify(live_signals)
+
+@app.route('/api/performance')
+def get_performance():
+    """Get performance comparison data"""
+    # Get real performance from paper trading engine
+    summary = paper_trader.get_performance_summary()
+    performance = {
+        'original_system': {'win_rate': 24.0, 'risk_reward': '1:2'},
+        'enhanced_system': {
+            'win_rate': summary['win_rate'],
+            'risk_reward': '2:1',
+            'total_pnl': summary['total_pnl'],
+            'total_return_percent': summary['total_return_percent']
+        }
+    }
+    return jsonify(performance)
+
+@app.route('/api/stop_system', methods=['POST'])
+def stop_system():
+    """Stop the trading system"""
+    system_status['running'] = False
+    return jsonify({'status': 'stopped'})
+
+@app.route('/api/start_system', methods=['POST'])
+def start_system():
+    """Start the trading system"""
+    system_status['running'] = True
+    return jsonify({'status': 'started'})
+
+@app.route('/api/trades')
+def get_trades():
+    """Get recent trades from paper trading engine"""
+    # Get all trades (active + closed) from paper trading engine
+    all_trades = []
+    
+    # Add closed trades
+    for trade in paper_trader.closed_trades:
+        all_trades.append({
+            'trade_id': trade.trade_id,
+            'ticker': trade.ticker,
+            'direction': trade.direction,
+            'quantity': trade.quantity,
+            'open_price': trade.open_price,
+            'close_price': trade.close_price,
+            'open_time': trade.open_time.isoformat(),
+            'close_time': trade.close_time.isoformat() if trade.close_time else None,
+            'pnl': trade.pnl,
+            'pnl_percent': trade.pnl_percent,
+            'status': trade.status
+        })
+    
+    # Add active trades
+    for trade in paper_trader.active_trades.values():
+        all_trades.append({
+            'trade_id': trade.trade_id,
+            'ticker': trade.ticker,
+            'direction': trade.direction,
+            'quantity': trade.quantity,
+            'open_price': trade.open_price,
+            'close_price': None,
+            'open_time': trade.open_time.isoformat(),
+            'close_time': None,
+            'pnl': 0.0,  # Unrealized
+            'pnl_percent': 0.0,
+            'status': 'OPEN'
+        })
+    
+    # Sort by open time (most recent first)
+    all_trades.sort(key=lambda t: t['open_time'], reverse=True)
+    
+    # Return last 20 trades
+    return jsonify(all_trades[:20])
+
+def update_system_status():
+    """Background thread to update system status and scan for signals"""
+    import asyncio
+    import random
+    last_signals = []
+    
+    while True:
+        try:
+            system_status['last_update'] = datetime.now().isoformat()
+            
+            # Scan for signals using the main event loop
+            if system_status['running']:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                signals = loop.run_until_complete(trade_signal_generator.scan_for_signals())
+                loop.close()
+                
+                global live_signals
+                live_signals = signals
+                
+                system_status['positions'] = len(live_signals)
+                
+                # Simulate demo trades for new signals
+                current_symbols = [s['symbol'] for s in signals]
+                last_symbols = [s['symbol'] for s in last_signals]
+                
+                # Find new signals that weren't in the last update
+                new_signals = [s for s in signals if s['symbol'] not in last_symbols]
+                
+                # Randomly execute some new signals (simulate selective trading)
+                for signal in new_signals:
+                    # Only trade signals with decent strength and random selection
+                    if (signal.get('signal_strength', 0) > 0.2 and 
+                        random.random() < 0.3):  # 30% of signals get "executed"
+                        simulate_demo_trade(signal)
+                
+                last_signals = signals.copy()
+                
+                # Update demo performance
+                update_demo_performance()
+                
+                if live_signals:
+                    print(f"📡 Dashboard updated with {len(signals)} signals")
+                else:
+                    print(f"📡 Dashboard scan complete - no signals found")
+            
+            time.sleep(30)  # Update every 30 seconds
+            
+        except Exception as e:
+            app.logger.error(f"Status update error: {e}")
+            print(f"❌ Dashboard update error: {e}")
+            time.sleep(60)
+
+def create_html_template():
+    """Create the dashboard HTML template"""
+    template_dir = Path(__file__).parent / 'templates'
+    template_dir.mkdir(exist_ok=True)
+    
+    html_content = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Day Trader Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .status-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        
+        .status-card h3 {
+            color: #4ade80;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        
+        .status-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .status-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .performance-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .system-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+        }
+        
+        .original-system {
+            border-left: 5px solid #ef4444;
+        }
+        
+        .enhanced-system {
+            border-left: 5px solid #22c55e;
+        }
+        
+        .win-rate {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0 10px;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .btn-stop {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        
+        .btn-start {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+        
+        .running {
+            color: #4ade80;
+        }
+        
+        .stopped {
+            color: #ef4444;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        .signals-section {
+            margin: 30px 0;
+        }
+        
+        .signal-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        
+        .signal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .signal-symbol {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .signal-direction {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .signal-buy {
+            background: #22c55e;
+            color: white;
+        }
+        
+        .signal-sell {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .signal-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .signal-detail {
+            text-align: center;
+        }
+        
+        .signal-detail-label {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        
+        .signal-detail-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        
+        .signal-strength {
+            width: 100%;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+        
+        .signal-strength-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #22c55e 100%);
+            transition: width 0.3s ease;
+        }
+        
+        .no-signals {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Enhanced Day Trader Dashboard v2.0</h1>
+            <p>Real-time monitoring and control system</p>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>System Status</h3>
+                <div id="system-status" class="status-value running pulse">RUNNING</div>
+                <div class="status-label">Current State</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Active Positions</h3>
+                <div id="positions-count" class="status-value">0</div>
+                <div class="status-label">Open Trades</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Account Balance</h3>
+                <div id="account-balance" class="status-value">$10,000.00</div>
+                <div class="status-label">Demo Account</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Daily P&L</h3>
+                <div id="daily-pnl" class="status-value">$0.00</div>
+                <div class="status-label">Today's Performance</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Total Trades</h3>
+                <div id="total-trades" class="status-value">0</div>
+                <div class="status-label">Demo Executions</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>Win Rate</h3>
+                <div id="win-rate" class="status-value">65%</div>
+                <div class="status-label">Success Ratio</div>
+            </div>
+        </div>
+        
+        <div class="performance-comparison">
+            <div class="system-card original-system">
+                <h3>Original System</h3>
+                <div class="win-rate" style="color: #ef4444;">24%</div>
+                <p>Risk/Reward: 1:2</p>
+                <p>Breakeven: 67%</p>
+                <p style="margin-top: 10px; opacity: 0.7;">Legacy Performance</p>
+            </div>
+            
+            <div class="system-card enhanced-system">
+                <h3>Enhanced System v2.0</h3>
+                <div class="win-rate" style="color: #22c55e;">65%</div>
+                <p>Risk/Reward: 2:1</p>
+                <p>Breakeven: 33%</p>
+                <p style="margin-top: 10px; opacity: 0.7;">Target Performance</p>
+            </div>
+        </div>
+        
+        <!-- Live Trade Signals Section -->
+        <div class="signals-section">
+            <h2 style="text-align: center; margin-bottom: 20px;">Live Trade Signals</h2>
+            <div id="signals-container">
+                <div class="no-signals">
+                    <p style="text-align: center; opacity: 0.7;">Scanning for trade setups...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Demo Trades Section -->
+        <div class="signals-section">
+            <h2 style="text-align: center; margin-bottom: 20px;">Recent Demo Trades</h2>
+            <div id="trades-container">
+                <div class="no-signals">
+                    <p style="text-align: center; opacity: 0.7;">No demo trades executed yet...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-stop" onclick="stopSystem()">Stop System</button>
+            <button class="btn btn-start" onclick="startSystem()">Start System</button>
+            <button class="btn" onclick="refreshData()">Refresh Data</button>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; opacity: 0.7;">
+            <p>Last Update: <span id="last-update">--</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Update status and signals at different intervals
+        setInterval(updateStatus, 10000);   // Status every 10 seconds
+        setInterval(updateSignals, 15000);  // Signals every 15 seconds  
+        setInterval(updateTrades, 20000);   // Trades every 20 seconds
+        updateStatus(); // Initial load
+        updateSignals(); // Initial load
+        updateTrades(); // Initial load
+        
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('system-status').textContent = data.running ? 'RUNNING' : 'STOPPED';
+                    document.getElementById('system-status').className = 'status-value ' + (data.running ? 'running pulse' : 'stopped');
+                    document.getElementById('positions-count').textContent = data.positions;
+                    document.getElementById('account-balance').textContent = '$' + data.balance.toFixed(2);
+                    document.getElementById('daily-pnl').textContent = '$' + data.daily_pnl.toFixed(2);
+                    document.getElementById('total-trades').textContent = data.total_trades;
+                    document.getElementById('win-rate').textContent = data.win_rate.toFixed(1) + '%';
+                    document.getElementById('last-update').textContent = new Date(data.last_update).toLocaleString();
+                    
+                    // Color-code the P&L
+                    const pnlElement = document.getElementById('daily-pnl');
+                    if (data.daily_pnl > 0) {
+                        pnlElement.style.color = '#22c55e'; // Green for profits
+                    } else if (data.daily_pnl < 0) {
+                        pnlElement.style.color = '#ef4444'; // Red for losses
+                    } else {
+                        pnlElement.style.color = '#ffffff'; // White for zero
+                    }
+                })
+                .catch(error => console.error('Error updating status:', error));
+        }
+        
+        function updateTrades() {
+            fetch('/api/trades')
+                .then(response => response.json())
+                .then(trades => {
+                    const container = document.getElementById('trades-container');
+                    
+                    if (trades.length === 0) {
+                        container.innerHTML = '<div class="no-signals"><p style="text-align: center; opacity: 0.7;">No demo trades executed yet...</p></div>';
+                        return;
+                    }
+                    
+                    let tradesHtml = '';
+                    trades.forEach(trade => {
+                        const outcomeColor = trade.outcome === 'WIN' ? '#22c55e' : '#ef4444';
+                        const profitSign = trade.profit >= 0 ? '+' : '';
+                        
+                        tradesHtml += `
+                            <div class="signal-card" style="border-left: 4px solid ${outcomeColor};">
+                                <div class="signal-header">
+                                    <div class="signal-symbol">${trade.symbol}</div>
+                                    <div class="signal-direction" style="background: ${outcomeColor};">${trade.outcome}</div>
+                                </div>
+                                <div class="signal-details">
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">${trade.direction}</div>
+                                        <div class="signal-detail-value">${trade.shares} shares</div>
+                                    </div>
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">Entry</div>
+                                        <div class="signal-detail-value">$${trade.entry_price}</div>
+                                    </div>
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">Exit</div>
+                                        <div class="signal-detail-value">$${trade.exit_price}</div>
+                                    </div>
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">Profit/Loss</div>
+                                        <div class="signal-detail-value" style="color: ${outcomeColor};">${profitSign}$${trade.profit.toFixed(2)}</div>
+                                    </div>
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">Time</div>
+                                        <div class="signal-detail-value">${new Date(trade.timestamp).toLocaleTimeString()}</div>
+                                    </div>
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">Signal Strength</div>
+                                        <div class="signal-detail-value">${(trade.signal_strength * 100).toFixed(0)}%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    container.innerHTML = tradesHtml;
+                })
+                .catch(error => {
+                    console.error('Error updating trades:', error);
+                    document.getElementById('trades-container').innerHTML = 
+                        '<div class="no-signals"><p style="color: #ef4444;">Error loading trades</p></div>';
+                });
+        }
+        
+        function updateSignals() {
+            fetch('/api/signals')
+                .then(response => response.json())
+                .then(signals => {
+                    const container = document.getElementById('signals-container');
+                    
+                    if (signals.length === 0) {
+                        container.innerHTML = '<div class="no-signals"><p>No active trade signals found</p><p style="opacity: 0.5; margin-top: 10px;">System is scanning 25 sector ETFs every 30 seconds...</p><p style="opacity: 0.3; font-size: 0.9rem; margin-top: 5px;">Signals appear when RSI, MACD, volume, and momentum align across sectors</p></div>';
+                        return;
+                    }
+                    
+                    let signalsHtml = '';
+                    signals.forEach(signal => {
+                        signalsHtml += createSignalCard(signal);
+                    });
+                    
+                    container.innerHTML = signalsHtml;
+                })
+                .catch(error => {
+                    console.error('Error updating signals:', error);
+                    document.getElementById('signals-container').innerHTML = 
+                        '<div class="no-signals"><p style="color: #ef4444;">Error loading signals</p></div>';
+                });
+        }
+        
+        function createSignalCard(signal) {
+            const directionClass = signal.direction === 'BUY' ? 'signal-buy' : 'signal-sell';
+            const strengthPercent = (signal.signal_strength * 100).toFixed(0);
+            
+            return `
+                <div class="signal-card">
+                    <div class="signal-header">
+                        <div class="signal-symbol">${signal.symbol}</div>
+                        <div class="signal-direction ${directionClass}">${signal.direction}</div>
+                    </div>
+                    
+                    <div class="signal-details">
+                        <div class="signal-detail">
+                            <div class="signal-detail-label">Entry Price</div>
+                            <div class="signal-detail-value">$${signal.entry_price}</div>
+                        </div>
+                        <div class="signal-detail">
+                            <div class="signal-detail-label">Stop Loss</div>
+                            <div class="signal-detail-value">$${signal.stop_loss}</div>
+                        </div>
+                        <div class="signal-detail">
+                            <div class="signal-detail-label">Take Profit</div>
+                            <div class="signal-detail-value">$${signal.take_profit}</div>
+                        </div>
+                        <div class="signal-detail">
+                            <div class="signal-detail-label">Position Size</div>
+                            <div class="signal-detail-value">${signal.position_size} shares</div>
+                        </div>
+                        <div class="signal-detail">
+                            <div class="signal-detail-label">Risk/Reward</div>
+                            <div class="signal-detail-value">${signal.risk_reward_ratio}:1</div>
+                        </div>
+                        <div class="signal-detail">
+                            <div class="signal-detail-label">Potential Profit</div>
+                            <div class="signal-detail-value" style="color: #22c55e;">$${signal.potential_profit}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="signal-strength">
+                        <div class="signal-strength-fill" style="width: ${strengthPercent}%"></div>
+                    </div>
+                    <div style="text-align: center; margin-top: 5px; font-size: 0.9rem;">
+                        Signal Strength: ${strengthPercent}% | RSI: ${signal.rsi} | Volume: ${signal.volume_ratio}x
+                    </div>
+                </div>
+            `;
+        }
+        
+        function stopSystem() {
+            fetch('/api/stop_system', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert('System stopped');
+                    updateStatus();
+                })
+                .catch(error => console.error('Error stopping system:', error));
+        }
+        
+        function startSystem() {
+            fetch('/api/start_system', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert('System started');
+                    updateStatus();
+                })
+                .catch(error => console.error('Error starting system:', error));
+        }
+        
+        function refreshData() {
+            updateStatus();
+            updateSignals();
+            updateTrades();
+            alert('Data refreshed');
+        }
+    </script>
+</body>
+</html>'''
+    
+    with open(template_dir / 'dashboard.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+def run_dashboard(port=8051):
+    """Run the web dashboard"""
+    try:
+        # Create HTML template
+        create_html_template()
+        
+        # Start status update thread
+        status_thread = threading.Thread(target=update_system_status, daemon=True)
+        status_thread.start()
+        
+        print(f"🌐 Enhanced Day Trader Dashboard starting on http://localhost:{port}")
+        print("📊 Access your trading dashboard in your web browser")
+        
+        app.run(host='0.0.0.0', port=port, debug=False)
+        
+    except Exception as e:
+        print(f"❌ Dashboard startup error: {e}")
+        logging.error(f"Dashboard error: {e}")
+
+if __name__ == "__main__":
+    run_dashboard()

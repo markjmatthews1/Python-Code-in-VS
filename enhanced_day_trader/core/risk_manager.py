@@ -27,8 +27,8 @@ class EnhancedRiskManager:
     
     def __init__(self, account_balance: float = 10000):
         self.account_balance = account_balance
-        self.max_risk_per_trade = 0.01  # 1% of account per trade
-        self.max_daily_risk = 0.05      # 5% of account per day
+        self.max_risk_per_trade = 0.005  # 0.5% of account per trade (reduced from 1%)
+        self.max_daily_risk = 0.025      # 2.5% of account per day (reduced from 5%)
         self.daily_loss = 0.0
         self.active_positions = {}
         
@@ -58,12 +58,18 @@ class EnhancedRiskManager:
         # Calculate position size (shares)
         max_shares = int(max_dollar_risk / stop_distance)
         
-        # Calculate maximum position value (25% of account for leverage limit)
-        max_position_value = self.account_balance * 0.25
+        # Calculate maximum position value (20% of account for realistic sizing)
+        max_position_value = self.account_balance * 0.20  # 20% instead of 25%
         leverage_limited_shares = int(max_position_value / entry_price)
         
         # Use the more conservative limit
         final_shares = min(max_shares, leverage_limited_shares)
+        
+        # Ensure minimum viable trade size but not too large
+        if final_shares < 1:
+            final_shares = 1  # Minimum 1 share
+        elif final_shares * entry_price > self.account_balance * 0.20:
+            final_shares = int(self.account_balance * 0.20 / entry_price)
         
         # Calculate actual dollar amounts
         position_value = final_shares * entry_price
@@ -295,7 +301,7 @@ def test_risk_manager():
     print(f"   Risk/Reward: {position['risk_reward_ratio']:.1f}:1")
     
     # Test trade validation
-    validation = rm.validate_trade_entry('SPY', entry_price, position['shares'])
+    validation = rm.validate_trade_entry('XLK', entry_price, position['shares'])
     print(f"\n✅ Trade Validation: {'PASS' if validation['valid'] else 'FAIL'}")
     if not validation['valid']:
         for reason in validation['reasons']:
@@ -310,6 +316,9 @@ def test_risk_manager():
     print(f"   Stop Loss: {summary['stop_pct']*100:.1f}%")
     print(f"   Breakeven Win Rate Needed: {summary['breakeven_win_rate_needed']*100:.0f}%")
     print(f"   Daily Risk Remaining: {summary['daily_risk_remaining']*100:.1f}%")
+
+# Global enhanced risk manager instance for backward compatibility
+enhanced_risk_manager = EnhancedRiskManager()
 
 if __name__ == "__main__":
     test_risk_manager()

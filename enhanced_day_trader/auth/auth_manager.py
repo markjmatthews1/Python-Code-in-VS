@@ -13,21 +13,41 @@ Date: September 26, 2025
 import sys
 import os
 from pathlib import Path
+import pandas as pd
 
 # Add parent directory to path for auth imports
-parent_dir = Path(__file__).parent.parent.absolute()
+parent_dir = Path(__file__).parent.parent.parent.absolute()
 sys.path.insert(0, str(parent_dir))
 
 try:
     # Import existing authentication modules
-    from Schwab_auth import fetch_batch_quotes, get_streamer
-    from etrade_auth import get_etrade_session, fetch_etrade_market_data  
-    from schwab_data import fetch_minute_bars_for_range, fetch_schwab_minute_ohlcv
+    import Schwab_auth
+    import etrade_auth
+    import schwab_data
+    
+    # Import specific functions with error handling
+    fetch_batch_quotes = getattr(Schwab_auth, 'fetch_batch_quotes', None)
+    fetch_quote = getattr(Schwab_auth, 'fetch_quote', None)
+    get_valid_access_token = getattr(Schwab_auth, 'get_valid_access_token', None)
+    get_etrade_session = getattr(etrade_auth, 'get_etrade_session', None)
+    fetch_etrade_market_data = getattr(etrade_auth, 'fetch_etrade_market_data', None)
+    fetch_minute_bars_for_range = getattr(schwab_data, 'fetch_minute_bars_for_range', None)
+    fetch_schwab_minute_ohlcv = getattr(schwab_data, 'fetch_schwab_minute_ohlcv', None)
     
     print("✅ Successfully imported authentication modules")
     
 except ImportError as e:
     print(f"⚠️ Authentication import warning: {e}")
+    print("Ensure parent directory has Schwab_auth.py and etrade_auth.py")
+    
+    # Create dummy functions for demo mode
+    fetch_batch_quotes = lambda symbols: {}
+    fetch_quote = lambda symbol: {}
+    get_valid_access_token = lambda: "dummy_token"
+    get_etrade_session = lambda: None
+    fetch_etrade_market_data = lambda symbol: {}
+    fetch_minute_bars_for_range = lambda symbol, start, end: pd.DataFrame()
+    fetch_schwab_minute_ohlcv = lambda symbol: pd.DataFrame()
     print("Ensure parent directory has Schwab_auth.py and etrade_auth.py")
 
 # Wrapper functions to ensure clean interface
@@ -42,9 +62,23 @@ class EnhancedAuthManager:
         self.etrade_session = None
         
     def get_schwab_quotes(self, tickers):
-        """Get Schwab quotes for multiple tickers"""
+        """Get Schwab quotes for multiple tickers using existing auth"""
         try:
-            return fetch_batch_quotes(tickers)
+            if isinstance(tickers, str):
+                # Single ticker
+                return fetch_quote(tickers)
+            else:
+                # Multiple tickers - use batch if available, otherwise individual calls
+                if fetch_batch_quotes:
+                    return fetch_batch_quotes(tickers)
+                else:
+                    # Fallback to individual calls
+                    results = {}
+                    for ticker in tickers:
+                        quote = fetch_quote(ticker)
+                        if quote:
+                            results.update(quote)
+                    return results
         except Exception as e:
             print(f"Schwab quote error: {e}")
             return {}
@@ -81,7 +115,7 @@ def test_authentication():
     """Test that authentication is working"""
     print("🧪 Testing Enhanced Day Trader Authentication...")
     
-    test_tickers = ['SPY', 'QQQ']
+    test_tickers = ['XLK', 'XLF']
     
     # Test Schwab quotes
     try:
@@ -105,7 +139,7 @@ def test_authentication():
     
     # Test historical data
     try:
-        hist_data = enhanced_auth.get_historical_data('SPY', days_back=1)
+        hist_data = enhanced_auth.get_historical_data('XLK', days_back=1)
         if hist_data is not None and not hist_data.empty:
             print(f"✅ Historical data working: {len(hist_data)} records")
         else:
