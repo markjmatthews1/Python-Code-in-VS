@@ -1,0 +1,122 @@
+Strategic Plan: WeeklyPay™ Rotation App
+Basic app requirements:
+    All output should have the following
+        Font: Arial 12
+        Interface: Gui no web dashboards
+        Gui: needs to be colorful no black and white 
+        Gui: Clear Green rotate in and Red rotate out signals
+        Data: must be realtime data no guess or simulated data for outputs.
+
+🧠 Step 1: ETF Universe (High-Yield WeeklyPay™ Targets)
+These are the Roundhill ETFs we’ll track initially. You can expand later.
+
+You can add TSLW (Tesla) or AAPLW (Apple) later if you want more rotation options.
+
+🧠 Step 2: Rotation Rules (Signal Triggers)
+These rules will drive your “buy/sell” recommendations.
+🔁 Rotation Into ETF
+• 	Earnings Week: If the underlying stock reports earnings this week → rotate in
+• 	Sector Momentum: If sector ETF (e.g., SMH, XLC) has RSI > 60 → rotate in
+• 	Weekly Payout Spike: If ETF pays > 0.5% of NAV this week → rotate in
+• 	Bullish News/Upgrade: Optional manual override if major news hits
+🔁 Rotation Out of ETF
+• 	Post-Earnings Week: Rotate out 1–2 days after earnings
+• 	Sector RSI < 40: Weak momentum → rotate out
+• 	Flat or Negative Weekly Return: ETF underperforms → rotate out
+• 	NAV Erosion > 1%: Protect capital → rotate out
+
+🧠 Step 3: Signal Output Format
+Your app will generate alerts like:
+
+📅 Week of Oct 7–11
+✅ Rotate INTO: AMDW (AMD earnings Oct 8, SMH RSI = 64)
+❌ Rotate OUT OF: HOOW (Meta flat, XLC RSI = 38)
+💰 Expected Yield: ~1.2% (based on AMDW payout history)
+
+You can display this in CLI, Streamlit, or email/SMS.
+
+🧠 Next Step: Build the Signal Engine
+Let’s have Claude help you build:
+• 	A Python module that tracks ETF tickers
+• 	Pulls earnings dates (from Yahoo or Finnhub)
+• 	Pulls RSI for SMH, XLC, XLK (via free API)
+• 	Scrapes Roundhill’s payout data (or uses manual input)
+• 	Outputs rotation alerts based on your rules
+
+Phase 1: Signal Engine (Core Logic)
+This is the brain of the system. It doesn’t need APIs yet—just logic and data.
+Goals:
+- Track WeeklyPay™ ETFs (e.g., NVDW, AMDW, HOOW, MSFW, GOOW)
+- Monitor:
+- Earnings calendar (manual scrape or free API)
+- Sector momentum (RSI/SMA on SMH, XLC, XLK)
+- Weekly dividend payouts (manual scrape from Roundhill site or E*TRADE calendar)
+- Generate rotation alerts:
+- “Rotate out of AMDW → into HOOW (Meta earnings tomorrow)”
+- “Sector RSI > 60 → rotate into NVDW”
+Tools:
+- Python + Pandas for logic
+- SQLite or JSON for state tracking
+- Claude for module generation and refactoring
+
+Phase 2: Dashboard or Alert System
+You decide how you want to receive signals.
+Options:
+- Simple CLI output (fastest)
+- Streamlit dashboard (visual, interactive)
+- Email or SMS alerts (via Zapier or Twilio)
+This phase is optional but helps you act quickly without needing to open VS every time.
+
+Phase 3: Trade Execution (Optional Later)
+If you want to automate trades later, this is where Schwab/E*TRADE APIs come in.
+Challenges:
+- Limited data from APIs (no dividend calendar, no ETF-specific metrics)
+- Execution only—no deep analytics
+Workaround:
+- Use the app to generate trade signals
+- Manually execute via Schwab/E*TRADE
+- Or build basic buy/sell wrappers using your existing auth setup
+
+🧠 Tactical Fit for You
+This plan gives you:
+- Fast deployment (Phase 1 can be built in a day or two)
+- Full control (manual execution with smart alerts)
+- Scalable logic (add more ETFs, overlays, or filters anytime)
+- No paid data dependency (use free sources + manual inputs)
+
+🔧 Suggested Starting Point
+Let’s begin by defining:
+- The list of ETFs you want to track (e.g., NVDW, AMDW, HOOW, MSFW, GOOW)
+- The rotation rules:
+- Earnings week = rotate in
+- Sector RSI > 60 = rotate in
+- Weekly payout > 0.5% NAV = rotate in
+- RSI < 40 or post-earnings = rotate out
+
+
+ WeeklyPay™ Enhancement Notes
+🧭 Module: Intraday Reversal & Volume Decay Tracker
+Purpose: Flag early morning pops followed by fades in high-beta tickers (e.g., SMCI) and ETFs used in WeeklyPay™ rotation.
+Key Features:
+- Monitor price action from 9:30 AM to 11:30 AM ET
+- Compare opening gap vs. volume surge and VWAP behavior
+- Trigger alerts when:
+- Price gains >2% in first 30 minutes, then fades >1% by 11 AM
+- Volume drops >40% from first hour to second hour
+- RSI >70 followed by MACD crossover down
+- Optional overlay: sector ETF correlation to identify systemic vs. ticker-specific reversals
+Use Case: Helps avoid chasing false breakouts and improves timing for exits or covered call overlays.
+
+💰 Module: Post-Dividend Price Decay vs. Payout Tracker
+Purpose: Quantify net yield after dividend payout vs. price drop for top WeeklyPay™ ETFs.
+Key Features:
+- Track ETF price from day before ex-dividend to 3 days after pay date
+- Compare:
+- Dividend amount
+- Price drop on ex-date
+- Recovery time (if any)
+- Calculate net yield: (Dividend – Price Drop) / Entry Price
+- Flag ETFs with consistent recovery patterns or excessive decay
+Use Case: Helps refine ETF selection and exit timing to maximize net yield and avoid erosion.
+
+Let me know when you’re ready to wireframe these with Claude — we can modularize them for dashboard integration and even simulate historical performance across your top tickers.

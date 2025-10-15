@@ -136,11 +136,14 @@ def fetch_schwab_latest_minute(symbol):
     Returns a DataFrame with columns: Datetime, Ticker, Open, High, Low, Close, Volume
     """
    
-    access_token = load_schwab_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
-    }
+    ensure_fresh_token()  # Ensure fresh token before API call
+    
+    def get_headers():
+        return {
+            "Authorization": f"Bearer {get_valid_access_token()}",
+            "Accept": "application/json"
+        }
+    
     endpoint = "https://api.schwabapi.com/marketdata/v1/pricehistory"
     now = datetime.utcnow()
     start = int((now - timedelta(minutes=2)).timestamp() * 1000)
@@ -153,7 +156,16 @@ def fetch_schwab_latest_minute(symbol):
         "endDate": end,
         "needExtendedHoursData": "true"  # <-- Enable premarket and after hours data
     }
-    response = requests.get(endpoint, headers=headers, params=params)
+    
+    response = requests.get(endpoint, headers=get_headers(), params=params)
+    
+    # Handle 401 with token refresh and retry
+    if response.status_code == 401:
+        print(f"🔄 401 Unauthorized for {symbol}, refreshing token and retrying...")
+        refresh_access_token()
+        time.sleep(1)  # Brief pause after refresh
+        response = requests.get(endpoint, headers=get_headers(), params=params)
+    
     if response.status_code == 200:
         data = response.json()
         if "candles" in data and data["candles"]:
@@ -173,7 +185,8 @@ def fetch_schwab_latest_minute(symbol):
             print(f"No OHLCV data returned for symbol: {symbol}")
             return pd.DataFrame()
     else:
-        print(f"Error fetching latest OHLCV for {symbol}: {response.status_code} {response.text}")
+        print(f"Error fetching latest OHLCV for {symbol}: {response.status_code}")
+        print(f"Response content: {response.text}")
         return pd.DataFrame()
         
 def fetch_minute_bars_for_range(symbol, start_dt, end_dt, max_retries=3):

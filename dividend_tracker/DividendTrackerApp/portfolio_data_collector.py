@@ -95,6 +95,209 @@ class PortfolioDataCollector:
             print(f"❌ Error loading ticker yields: {e}")
             return {}
     
+    def collect_fresh_ticker_yields_from_all_accounts(self):
+        """Collect fresh ticker yields from ALL portfolio accounts (E*TRADE + Schwab)"""
+        print("🔄 Collecting fresh ticker yields from ALL portfolio accounts...")
+        
+        # First, get all unique tickers from all portfolio accounts
+        print("📊 Step 1: Collecting tickers from all accounts...")
+        all_tickers = set()
+        
+        try:
+            # Get E*TRADE positions (both IRA and Taxable)
+            sys.path.append(os.path.join(self.main_dir, 'modules'))
+            from etrade_account_api import ETRADEAccountAPI
+            
+            etrade_api = ETRADEAccountAPI()
+            accounts = etrade_api.get_account_list()
+            
+            if accounts:
+                for account in accounts:
+                    account_id = account.get('accountIdKey', '')
+                    account_type = account.get('accountType', '')
+                    account_desc = account.get('accountDesc', '')
+                    print(f"   📋 Processing E*TRADE account: {account_desc} ({account_type})")
+                    
+                    positions = etrade_api.get_account_positions(account_id)
+                    if positions:
+                        for pos in positions:
+                            product = pos.get('Product', {})
+                            symbol = product.get('symbol', '').strip()
+                            if symbol and len(symbol) <= 5:  # Valid ticker format
+                                all_tickers.add(symbol)
+                                print(f"      ✅ Added E*TRADE ticker: {symbol}")
+            
+            # Get Schwab positions (using fallback system due to OAuth complexity)
+            print("   📋 Processing Schwab accounts...")
+            schwab_tickers_added = False
+            
+            # Skip Schwab API direct call due to manual OAuth requirement
+            print("   ⚠️ Skipping Schwab API direct access (requires manual OAuth)")
+            
+            # Use fallback: Extract Schwab tickers from successful balance collection system
+            print("   📋 Using Schwab ticker extraction from balance collection system...")
+            try:
+                schwab_data = self.get_schwab_data()
+                for account_name, positions in schwab_data.get('positions', {}).items():
+                    print(f"   📋 Processing Schwab {account_name.replace('_', ' ').title()} from balance system...")
+                    for pos in positions:
+                        symbol = pos.get('symbol', '').strip()
+                        if symbol and len(symbol) <= 5:
+                            all_tickers.add(symbol)
+                            print(f"      ✅ Added Schwab ticker (fallback): {symbol}")
+                            schwab_tickers_added = True
+            except Exception as fallback_error:
+                print(f"   ⚠️ Schwab fallback collection failed: {fallback_error}")
+                schwab_tickers_added = False
+            
+        except Exception as e:
+            print(f"⚠️ Error collecting positions from some accounts: {e}")
+            # Continue with whatever tickers we managed to collect
+        
+        if not all_tickers:
+            print("❌ No tickers found in any account")
+            return {}
+        
+        print(f"📊 Step 2: Collected {len(all_tickers)} unique tickers from all accounts")
+        print(f"   Tickers: {sorted(all_tickers)}")
+        
+        # Now get yield data for all tickers using E*TRADE Quote API
+        return self._get_yield_data_for_tickers(list(all_tickers))
+    
+    def _get_yield_data_for_tickers(self, tickers):
+        """Get yield data for a list of tickers using E*TRADE Quote API"""
+        print(f"💰 Getting yield data for {len(tickers)} tickers...")
+        
+        ticker_yields = {}
+        
+        try:
+            # Get E*TRADE session for quote API calls
+            sys.path.append(os.path.join(self.main_dir, 'modules'))
+            from etrade_auth import get_etrade_session
+            import time
+            
+            session, base_url = get_etrade_session()
+            
+            if not session or not base_url:
+                print("❌ Could not get E*TRADE session for quotes")
+                return {}
+            
+            print("🔍 Getting dividend data for each ticker...")
+            for i, ticker in enumerate(tickers, 1):
+                try:
+                    print(f"   📊 ({i}/{len(tickers)}) Getting dividend data for {ticker}...")
+                    
+                    # Use E*TRADE Quote API
+                    quote_url = f"{base_url}/v1/market/quote/{ticker}.json"
+                    quote_response = session.get(quote_url)
+                    
+                    if quote_response.status_code == 200:
+                        quote_data = quote_response.json()
+                        
+                        # Extract dividend data from E*TRADE Quote API response
+                        dividend_yield = 0.0
+                        dividend_amount = 0.0
+                        annual_dividend = 0.0
+                        last_price = 0.0
+                        payment_frequency = 'quarterly'
+                        
+                        # Parse E*TRADE Quote API response structure
+                        if ('QuoteResponse' in quote_data and 
+                            'QuoteData' in quote_data['QuoteResponse'] and 
+                            isinstance(quote_data['QuoteResponse']['QuoteData'], list) and
+                            len(quote_data['QuoteResponse']['QuoteData']) > 0):
+                            
+                            quote_info = quote_data['QuoteResponse']['QuoteData'][0]
+                            all_data = quote_info.get('All', {})
+                            
+                            # Extract dividend information
+                            dividend_yield = float(all_data.get('yield', 0))
+                            annual_dividend = float(all_data.get('annualDividend', 0))
+                            dividend_amount = float(all_data.get('dividendAmount', 0))
+                            last_price = float(all_data.get('lastTrade', 0))
+                            
+                            # Handle weekly payers (like QDTE, NVDW, MSFW)
+                            weekly_dividend = float(all_data.get('dividend', 0))
+                            if weekly_dividend == 0:
+                                weekly_dividend = float(all_data.get('declaredDividend', 0))
+                            
+                            # Check if this is a weekly payer
+                            weekly_tickers = ['QDTE', 'NVDW', 'MSFW', 'QQQI']  # Add known weekly payers
+                            if ticker in weekly_tickers and weekly_dividend > 0:
+                                annual_dividend = weekly_dividend * 52  # 52 weeks per year
+                                payment_frequency = 'weekly'
+                                if last_price > 0:
+                                    dividend_yield = (annual_dividend / last_price) * 100
+                                print(f"      📊 {ticker} WEEKLY: ${weekly_dividend:.3f}/week × 52 = ${annual_dividend:.3f}/year = {dividend_yield:.2f}% yield")
+                            
+                            # Try alternative dividend field names if needed
+                            elif dividend_yield == 0:
+                                dividend_yield = float(all_data.get('dividendYield', 0))
+                            
+                            if annual_dividend == 0 and ticker not in weekly_tickers:
+                                annual_dividend = float(all_data.get('annualDiv', 0))
+                                if annual_dividend == 0:
+                                    annual_dividend = float(all_data.get('ttmDividend', 0))
+                            
+                            # Calculate yield if we have price and dividend
+                            if last_price > 0 and annual_dividend > 0 and dividend_yield == 0:
+                                dividend_yield = (annual_dividend / last_price) * 100
+                        
+                        # Calculate quarterly dividend
+                        quarterly_dividend = annual_dividend / 4 if annual_dividend > 0 else dividend_amount
+                        
+                        ticker_yields[ticker] = {
+                            'yield': dividend_yield,
+                            'dividend_amount': quarterly_dividend,
+                            'annual_dividend': annual_dividend,
+                            'payment_frequency': payment_frequency,
+                            'last_price': last_price,
+                            'has_dividend': annual_dividend > 0 or dividend_yield > 0,
+                            'dividend_source': 'etrade_quote_api_all_accounts',
+                            'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        
+                        if annual_dividend > 0 or dividend_yield > 0:
+                            print(f"      ✅ {ticker}: {dividend_yield:.2f}% yield, ${annual_dividend:.4f} annual dividend")
+                        else:
+                            print(f"      ⚪ {ticker}: No dividend data available")
+                    
+                    else:
+                        print(f"      ⚠️ Quote API error for {ticker}: {quote_response.status_code}")
+                        ticker_yields[ticker] = {
+                            'yield': 0.0,
+                            'dividend_amount': 0.0,
+                            'annual_dividend': 0.0,
+                            'payment_frequency': 'quarterly',
+                            'last_price': 0.0,
+                            'has_dividend': False,
+                            'dividend_source': 'etrade_quote_api_error',
+                            'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                    
+                    # Delay to avoid rate limiting
+                    time.sleep(0.1)
+                    
+                except Exception as ticker_error:
+                    print(f"      ❌ Error getting {ticker}: {ticker_error}")
+                    ticker_yields[ticker] = {
+                        'yield': 0.0,
+                        'dividend_amount': 0.0,
+                        'annual_dividend': 0.0,
+                        'payment_frequency': 'quarterly',
+                        'last_price': 0.0,
+                        'has_dividend': False,
+                        'dividend_source': 'error',
+                        'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+            
+            print(f"✅ Collected yield data for {len(ticker_yields)} tickers from all accounts")
+            return ticker_yields
+            
+        except Exception as e:
+            print(f"❌ Error collecting yield data: {e}")
+            return {}
+
     def collect_fresh_ticker_yields_from_etrade_ira(self):
         """Collect fresh ticker yields from E*TRADE IRA API"""
         print("🔄 Collecting fresh ticker yields from E*TRADE IRA API...")
@@ -870,9 +1073,9 @@ class PortfolioDataCollector:
             # Clear existing cache
             self.clear_cache()
             
-            # Collect fresh ticker yields from E*TRADE IRA API
-            print("\n📊 Step 1: Collecting fresh ticker yields...")
-            ticker_yields = self.collect_fresh_ticker_yields_from_etrade_ira()
+            # Collect fresh ticker yields from ALL accounts (E*TRADE + Schwab)
+            print("\n📊 Step 1: Collecting fresh ticker yields from all accounts...")
+            ticker_yields = self.collect_fresh_ticker_yields_from_all_accounts()
             
             if not ticker_yields:
                 print("⚠️ No ticker yields collected, trying fallback...")

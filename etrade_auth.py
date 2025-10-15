@@ -12,7 +12,8 @@ AUTH_ALERT_PATH = "C:/Users/mjmat/Pythons_Code_Files/auth_required.mp3"
 
 # Load API Credentials from config.ini
 config = configparser.ConfigParser()
-config.read("config.ini")
+config_path = os.path.join(os.path.dirname(__file__), "config.ini")
+config.read(config_path)
 
 consumer_key = config["ETRADE_API"]["CONSUMER_KEY"]
 consumer_secret = config["ETRADE_API"]["CONSUMER_SECRET"]
@@ -70,9 +71,10 @@ def authorize_etrade(force_new=False):
     if not force_new:
         oauth_token, oauth_token_secret = load_tokens()
         if oauth_token and oauth_token_secret:
-            print("\n✅ Using stored OAuth token. In Etrade auth.")
+            print("\n✅ Using stored OAuth token. Authentication complete.")
             return oauth_token, oauth_token_secret
 
+    print("🔐 [AUTH] Starting new E*TRADE OAuth process...")
     # If no valid tokens, start new OAuth process
     oauth_token, oauth_token_secret = get_auth_token()
     auth_url = f"{authorize_url}?key={consumer_key}&token={oauth_token}"
@@ -85,9 +87,12 @@ def authorize_etrade(force_new=False):
             print("Audio alert failed:", e)
     threading.Thread(target=play_auth_alert, daemon=True).start()
 
+    print("🔔 [AUTH] Audio alert played - please complete OAuth in browser window")
+
     # --- Tkinter GUI for OAuth ---
     def open_browser():
         import webbrowser
+        print("🌐 [AUTH] Opening browser for E*TRADE authorization...")
         webbrowser.open(auth_url)
 
     def submit_code():
@@ -95,6 +100,8 @@ def authorize_etrade(force_new=False):
         if not code:
             messagebox.showerror("Error", "Please enter the verification code.")
             return
+        
+        print(f"🔑 [AUTH] Processing verification code: {code[:4]}...")
         try:
             oauth = OAuth1Session(
                 consumer_key,
@@ -113,14 +120,17 @@ def authorize_etrade(force_new=False):
                 label = tk.Label(popup, text=message, font=("Arial", 14), bg="#222244", fg="white")
                 label.pack(expand=True, fill="both", padx=10, pady=20)
                 popup.after(duration, popup.destroy)
-            print("✅ Access token exchange successful. Token and secret saved.")  # <--- ADD THIS LINE
-            show_auto_close_message("Success", "✅ Access Token Saved Successfully.", duration=1000)
-            root.destroy()
+            print("✅ Access token exchange successful. Token and secret saved.")
+            show_auto_close_message("Success", "✅ Access Token Saved Successfully.\nApp will continue automatically...", duration=2000)
+            
+            # Signal successful completion and close GUI
+            root.after(2500, root.destroy)  # Close GUI after success message
             nonlocal_tokens[0] = final_token
             nonlocal_tokens[1] = final_secret
+            print("🚀 [AUTH] OAuth process completed successfully - app will continue...")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to authorize: {e}")
-            print(f"❌ Access token exchange failed: {e}")  # <--- ADD THIS LINE
+            print(f"❌ Access token exchange failed: {e}")
             # Delete token file on failure
             if os.path.exists(auth_file_path):
                 os.remove(auth_file_path)
@@ -175,6 +185,15 @@ _etrade_session_cache = {
     'secret': None
 }
 
+def clear_session_cache():
+    """Clear the cached session to force re-authentication on next request"""
+    global _etrade_session_cache
+    _etrade_session_cache['session'] = None
+    _etrade_session_cache['base_url'] = None
+    _etrade_session_cache['token'] = None
+    _etrade_session_cache['secret'] = None
+    print("[DEBUG] Session cache cleared")
+
 def get_etrade_session(force_new=False):
     """
     Returns a cached authenticated OAuth1Session and base_url.
@@ -183,12 +202,29 @@ def get_etrade_session(force_new=False):
     from requests_oauthlib import OAuth1Session
     global _etrade_session_cache
 
-    if not force_new and _etrade_session_cache['session'] is not None:
+    # Always check if we have fresh tokens from disk
+    oauth_token, oauth_token_secret = load_tokens()
+    
+    # If we have a cached session but the tokens changed, invalidate cache
+    if (_etrade_session_cache['session'] is not None and 
+        (_etrade_session_cache['token'] != oauth_token or 
+         _etrade_session_cache['secret'] != oauth_token_secret)):
+        print("[DEBUG] Token mismatch detected, clearing session cache")
+        _etrade_session_cache['session'] = None
+    
+    # Use cache only if not forced new and tokens match
+    if (not force_new and _etrade_session_cache['session'] is not None and
+        _etrade_session_cache['token'] == oauth_token and 
+        _etrade_session_cache['secret'] == oauth_token_secret):
         return _etrade_session_cache['session'], _etrade_session_cache['base_url']
 
-    oauth_token, oauth_token_secret = authorize_etrade(force_new=force_new)
+    # Get fresh tokens if force_new or no valid tokens
+    if force_new or not oauth_token or not oauth_token_secret:
+        oauth_token, oauth_token_secret = authorize_etrade(force_new=force_new)
+        
     if not oauth_token or not oauth_token_secret:
         raise Exception("❌ Could not obtain valid OAuth tokens. Please re-authorize.")
+        
     session = OAuth1Session(
         consumer_key,
         consumer_secret,
@@ -196,11 +232,14 @@ def get_etrade_session(force_new=False):
         resource_owner_secret=oauth_token_secret
     )
     base_url = prod_base_url
+    
     # Cache for reuse
     _etrade_session_cache['session'] = session
     _etrade_session_cache['base_url'] = base_url
     _etrade_session_cache['token'] = oauth_token
     _etrade_session_cache['secret'] = oauth_token_secret
+    
+    print(f"[DEBUG] Created new session with tokens: {oauth_token[:20]}...") 
     return session, base_url
 
 def fetch_etrade_market_data(tickers, retry=True):
@@ -212,11 +251,10 @@ def fetch_etrade_market_data(tickers, retry=True):
     import pandas as pd
     from datetime import datetime
 
+    print("🔄 [ETRADE] Starting fetch_etrade_market_data...")
     status = None
-    global session, base_url  # Ensure we update the global session/base_url
-    # Debug: print current session and base_url
-    print(f"[DEBUG] fetch_etrade_market_data: session={{session if 'session' in globals() else None}}, base_url={{base_url if 'base_url' in globals() else None}}")
-    print("Tickers to fetch market data for 1926:", tickers)
+    # Debug: show which tickers we're processing  
+    print("Tickers to fetch market data for:", tickers)
     def _pull_market_data(session, base_url, tickers):
         all_market_data = []
         # Clean ticker symbols: uppercase, strip spaces, remove empties/None
@@ -226,9 +264,19 @@ def fetch_etrade_market_data(tickers, retry=True):
             if t and isinstance(t, str) and t.strip().isalpha() and len(t.strip()) > 1
         ]
         for symbol in clean_tickers:
+            print(f"🔄 [ETRADE] Fetching data for {symbol}...")
             url_q = f"{base_url}/v1/market/quote/{symbol}.json"
-            response_q = session.get(url_q)
+            
+            try:
+                # Add timeout to HTTP request to prevent hanging
+                response_q = session.get(url_q, timeout=10)  # 10 second timeout
+                print(f"✅ [ETRADE] HTTP response received for {symbol} (status: {response_q.status_code})")
+            except Exception as req_error:
+                print(f"❌ [ETRADE] HTTP request failed for {symbol}: {req_error}")
+                continue
+                
             if response_q.status_code == 401:
+                print(f"🔑 [ETRADE] 401 Unauthorized for {symbol}")
                 return None, 401
             print("=== E*TRADE HTTP Response ===")
             print("Requesting symbol:", symbol)
@@ -269,33 +317,28 @@ def fetch_etrade_market_data(tickers, retry=True):
             time.sleep(0.3)
         return pd.DataFrame(all_market_data), 200
 
-    # Get session and base_url if not already set
-    # Always use cached session unless a 401 triggers a refresh
-    from etrade_auth import get_etrade_session as _get_etrade_session
-    global session, base_url
-    session, base_url = _get_etrade_session()
+    # Get session and base_url - always use the session manager
+    print("🔄 [ETRADE] Getting E*Trade session...")
+    session, base_url = get_etrade_session()
+    print(f"✅ [ETRADE] Session acquired - base_url: {base_url}")
 
-
+    print("🔄 [ETRADE] Starting data pull...")
     df_market, status = _pull_market_data(session, base_url, tickers)
+    print(f"✅ [ETRADE] Data pull completed - status: {status}")
+    
     if status == 401 and retry:
         print("❌ 401 Unauthorized: OAuth token expired. Refreshing token...")
-        # Refresh token and create a new session, update globals
+        # Force new session and update
+        print("🔄 [ETRADE] Getting new session after 401...")
         session, base_url = get_etrade_session(force_new=True)
-        globals()['session'] = session
-        globals()['base_url'] = base_url
-        # Debug: print new session and token info
-        try:
-            from etrade_auth import load_tokens
-            oauth_token, oauth_token_secret = load_tokens()
-            print(f"[DEBUG] Loaded new tokens after refresh: oauth_token={oauth_token}, oauth_token_secret={oauth_token_secret}")
-        except Exception as e:
-            print(f"[DEBUG] Could not load tokens after refresh: {e}")
-        print(f"[DEBUG] New session after token refresh: session={{session}}, base_url={{base_url}}")
+        print(f"✅ [ETRADE] New session acquired after token refresh")
         # Wait briefly to ensure file flush
         import time
         time.sleep(1)
         # Retry with new session (guaranteed to use new token)
+        print("🔄 [ETRADE] Retrying data pull with new session...")
         df_market, status = _pull_market_data(session, base_url, tickers)
+        print(f"✅ [ETRADE] Retry completed - status: {status}")
         if status == 401:
             print("[DEBUG] Still getting 401 after token refresh. Token may not be saving/loading correctly.")
             raise Exception("❌ Failed to refresh OAuth token. Please re-authorize manually.")
@@ -307,6 +350,7 @@ def fetch_etrade_market_data(tickers, retry=True):
         print("❌ No market data fetched.")
         return pd.DataFrame()
 
+    print(f"✅ [ETRADE] Market data fetch complete - {len(df_market)} rows")
     df_market.to_csv("market_data.csv", index=False)
     print("✅ Market data saved to CSV.")
     return df_market

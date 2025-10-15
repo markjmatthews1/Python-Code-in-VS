@@ -20,6 +20,7 @@ import tkinter as tk
 from tkinter import ttk
 import matplotlib.pyplot as plt
 import seaborn as sns
+from conservative_execution_enhancer import add_conservative_execution_reality
 
 
 
@@ -101,14 +102,44 @@ def load_quiver_cache(cache_path):
             df[col] = pd.to_datetime(df[col], errors="coerce")
     return df
 
-def load_trade_log(path="trade_log.xlsx"):
+def load_trade_log(path="trade_log.xlsx", use_realistic_execution=True):
     """
     Loads your manually tracked trades from Excel and adds a binary outcome label.
+    Uses row 0 as header and skips row 1 (which is a summary row).
+    Includes both Real and Paper trades for AI learning.
+    
+    Args:
+        path: Path to trade log Excel file
+        use_realistic_execution: If True, applies execution slippage to paper trades
     """
-    df = pd.read_excel(path)
-    df["Open Datetime"] = pd.to_datetime(df["Open Datetime"])
-    df["Close Datetime"] = pd.to_datetime(df["Close Datetime"])
+    # Read with row 0 as header
+    df = pd.read_excel(path, header=0)
+    
+    # Remove the summary row (row 1 in original file becomes index 0 after header)
+    # It has NaN values in most columns and "Total profit/loss" in Close Datetime
+    df = df.dropna(subset=['Ticker'])  # Keep only rows with actual ticker symbols
+    
+    # Keep both Real and Paper trades for AI learning
+    if 'Type' in df.columns:
+        print(f"Loading {len(df)} trades (Real and Paper) for AI training")
+        print(f"Trade breakdown: {df['Type'].value_counts().to_dict()}")
+        
+        # Apply realistic execution to paper trades for better AI training
+        if use_realistic_execution:
+            paper_trades = df[df['Type'] == 'Paper'].copy()
+            if len(paper_trades) > 0:
+                enhanced_paper = add_conservative_execution_reality(paper_trades)
+                # Update the main dataframe with enhanced paper trades
+                df.loc[df['Type'] == 'Paper'] = enhanced_paper
+                print(f"✅ Applied conservative execution reality to {len(paper_trades)} paper trades")
+    
+    # Convert datetime columns with error handling for different formats
+    # Handle formats like "2025-07-30 11.20" (period instead of colon)
+    df["Open Datetime"] = pd.to_datetime(df["Open Datetime"], format='mixed', dayfirst=False, errors='coerce')
+    df["Close Datetime"] = pd.to_datetime(df["Close Datetime"], format='mixed', dayfirst=False, errors='coerce')
     df["Trade Outcome"] = df["Profit/Loss"].apply(lambda x: 1 if x > 0 else 0)
+    
+    print(f"Successfully loaded {len(df)} trades from {path} for AI training")
     return df
 
 def compute_rsi(series, period=14):
@@ -474,13 +505,37 @@ def retrain_model_from_feedback(
         outcome = trade["Profit/Loss"]
         label = 1 if outcome > 0 else 0
 
+        # Skip if open_time is NaT or None
+        if pd.isna(open_time):
+            print(f"Skipping trade for {tkr}: Invalid open time")
+            continue
+
+        # Convert open_time to pandas Timestamp if it isn't already
+        if not isinstance(open_time, pd.Timestamp):
+            try:
+                open_time = pd.to_datetime(open_time)
+            except:
+                print(f"Skipping trade for {tkr}: Cannot convert open time to datetime")
+                continue
+
         # Match predictions within ±10 min of entry
-        candidates = preds_df[(preds_df["Ticker"] == tkr) & 
-                              (abs(preds_df["Datetime"] - open_time) <= pd.Timedelta(minutes=10))]
-        if not candidates.empty:
-            row = candidates.iloc[0].drop(["Ticker", "Datetime", "Predicted_Prob", "Outcome"])
-            feat = row.to_dict()
-            matched.append({**feat, "label": label})
+        # Filter out NaT values before datetime arithmetic
+        valid_preds = preds_df[(preds_df["Ticker"] == tkr) & 
+                              (pd.notna(preds_df["Datetime"]))]
+        
+        if not valid_preds.empty:
+            # Convert to datetime if needed and calculate time difference safely
+            try:
+                time_diff = (valid_preds["Datetime"] - open_time).abs()
+                candidates = valid_preds[time_diff <= pd.Timedelta(minutes=10)]
+                
+                if not candidates.empty:
+                    row = candidates.iloc[0].drop(["Ticker", "Datetime", "Predicted_Prob", "Outcome"])
+                    feat = row.to_dict()
+                    matched.append({**feat, "label": label})
+            except Exception as e:
+                print(f"Error processing datetime for {tkr}: {e}")
+                continue
 
     if not matched:
         print("No matching trades found for retraining.")
