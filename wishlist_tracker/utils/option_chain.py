@@ -1,14 +1,8 @@
-"""
-E*TRADE Option Chain Utility for Wishlist Tracker
-------------------------------------------------
-Fetches and analyzes put option chains for a given ticker using E*TRADE API.
-Selects the 'best' put (highest premium, $5–$10 above current price) and two alternatives.
-"""
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+import xml.etree.ElementTree as ET
 
-# Ensure the parent directory is in sys.path for import
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -16,198 +10,253 @@ if PROJECT_ROOT not in sys.path:
 from etrade_auth import get_etrade_session
 
 
-def fetch_put_option_chain(symbol, current_price, price_buffer=5, num_results=3, max_days=70):
-    session, base_url = get_etrade_session()
-
-    # --- Direct AMD Sept 19, 2025 Put Chain Request ---
-    if symbol.upper() == "AMD":
-        year, month, day = 2025, 9, 19  # Standard monthly expiration
-        strike_near = 180  # Center around $180
-        num_strikes = 10   # Pull 10 strikes around that level
-        url_exp = (
-            f"{base_url}/v1/market/optionchains.json?"
-            f"symbol={symbol}&chainType=PUT"
-            f"&expiryYear={year}&expiryMonth={month:02d}&expiryDay={day:02d}"
-            f"&strikePriceNear={strike_near}&noOfStrikes={num_strikes}"
-        )
+def get_target_expiration_dates():
+    """Get both current and next month 3rd Friday dates based on trading days rule"""
+    today = date.today()
+    current_third_friday = get_third_friday(today.year, today.month)
+    trading_days_left = calculate_trading_days(today, current_third_friday)
+    
+    print(f"DEBUG: {today} - Current month 3rd Friday: {current_third_friday} ({trading_days_left} trading days)")
+    
+    # Determine which months to use
+    months_to_check = []
+    
+    if trading_days_left > 5:
+        # Use current month
+        months_to_check.append(current_third_friday)
+        print(f"DEBUG: Using current month 3rd Friday: {current_third_friday}")
+        
+        # Add next month
+        if today.month == 12:
+            next_year = today.year + 1
+            next_month = 1
+        else:
+            next_year = today.year
+            next_month = today.month + 1
+        next_third_friday = get_third_friday(next_year, next_month)
+        months_to_check.append(next_third_friday)
+        print(f"DEBUG: Also using next month 3rd Friday: {next_third_friday}")
     else:
-        url_exp = f"{base_url}/v1/market/optionchains.json?symbol={symbol}&chainType=PUT"
+        # Skip current month, use next month
+        if today.month == 12:
+            next_year = today.year + 1
+            next_month = 1
+        else:
+            next_year = today.year
+            next_month = today.month + 1
+        next_third_friday = get_third_friday(next_year, next_month)
+        months_to_check.append(next_third_friday)
+        print(f"DEBUG: Skipping current month, using next month 3rd Friday: {next_third_friday}")
+        
+        # Add month after next
+        if next_month == 12:
+            next_next_year = next_year + 1
+            next_next_month = 1
+        else:
+            next_next_year = next_year
+            next_next_month = next_month + 1
+        next_next_third_friday = get_third_friday(next_next_year, next_next_month)
+        months_to_check.append(next_next_third_friday)
+        print(f"DEBUG: Also using month after next 3rd Friday: {next_next_third_friday}")
+    
+    return months_to_check
 
-    resp = session.get(url_exp)
-    data = resp.json()
-    # Fix: parse OptionChainResponse > OptionPair > Put
-    chain = data.get('OptionChainResponse', {})
-    option_pairs = chain.get('OptionPair', [])
-    if not option_pairs:
-        import json
-        print(f"DEBUG: Raw option chain response for {symbol}: {json.dumps(data, indent=2)}")
+
+def calculate_probability_above_strike(current_price, strike_price, days_to_expiry):
+    """Simple probability estimate based on strike distance and time"""
+    price_buffer = (current_price - strike_price) / current_price
+    
+    # Basic probability model - adjust as needed
+    if price_buffer >= 0.15:  # 15%+ buffer
+        base_prob = 0.85
+    elif price_buffer >= 0.10:  # 10-15% buffer
+        base_prob = 0.75
+    elif price_buffer >= 0.05:  # 5-10% buffer
+        base_prob = 0.65
+    elif price_buffer >= 0.02:  # 2-5% buffer
+        base_prob = 0.55
+    elif price_buffer >= 0:     # At the money or slightly above
+        base_prob = 0.50
+    else:                       # In the money
+        base_prob = 0.30
+    
+    # Adjust for time decay - longer time = higher risk
+    if days_to_expiry > 45:
+        time_adjustment = -0.10
+    elif days_to_expiry > 30:
+        time_adjustment = -0.05
+    elif days_to_expiry > 14:
+        time_adjustment = 0
+    else:
+        time_adjustment = 0.05
+    
+    final_prob = max(0.1, min(0.95, base_prob + time_adjustment))
+    return final_prob
+
+
+def fetch_put_option_chain(ticker, current_price):
+    """Fetch put options for 2 months, find best negative premium with probability analysis"""
+    session_result = get_etrade_session()
+    if not session_result:
+        print(f"Failed to get E*Trade session for {ticker}")
         return []
-    puts = []
-    today = datetime.now().date()
-    def is_third_friday(date):
-        # 3rd Friday: weekday() == 4 (Friday), and 15th <= day <= 21st
-        return date.weekday() == 4 and 15 <= date.day <= 21
-
-    # Collect all puts by expiration, include those with no bid/ask
-    exp_map = {}
-    all_puts_raw = []
-    # DEBUG: Print the first option pair's raw Put data for inspection
-    import json
-    if option_pairs:
-        print(f"DEBUG: First option pair for {symbol}: {json.dumps(option_pairs[0], indent=2)}")
-
-    for pair in option_pairs:
-        opt_data = pair.get('Put', {})
-        if not opt_data:
-            continue
-        display_symbol = opt_data.get('displaySymbol', '')
-        bid = opt_data.get('bid')
-        ask = opt_data.get('ask')
-        strike = opt_data.get('strikePrice')
-        try:
-            parts = display_symbol.split()
-            if len(parts) >= 5:
-                month = parts[1]
-                day = int(parts[2])
-                year = int('20' + parts[3].replace("'", ""))
-                exp_date = datetime.strptime(f"{year}-{month}-{day}", "%Y-%b-%d").date()
-            else:
-                continue
-        except Exception:
-            continue
-        days_to_exp = (exp_date - today).days
-        if days_to_exp < 0 or days_to_exp > max_days:
-            continue
-        # Only include standard monthly expirations (3rd Friday)
-        if not is_third_friday(exp_date):
-            continue
-        # Accept puts even if no bid/ask, use lastPrice as fallback
-        if bid is not None and ask is not None and bid > 0 and ask > 0:
-            premium = (bid + ask) / 2
-        elif bid is not None and bid > 0:
-            premium = bid
-        elif ask is not None and ask > 0:
-            premium = ask
-        else:
-            # Fallback to lastPrice if available and > 0
-            last_price = opt_data.get('lastPrice')
-            if last_price is not None and last_price > 0:
-                premium = last_price
-            else:
-                premium = None
-        open_interest = opt_data.get('openInterest', '')
-        net = strike - (premium or 0) if strike is not None and premium is not None else None
-        net_diff = current_price - net if net is not None and current_price is not None else None
-        put = {
-            'strike': strike,
-            'premium': premium,
-            'bid': bid,
-            'ask': ask,
-            'expiration': exp_date.strftime('%Y-%m-%d'),
-            'open_interest': open_interest,
-            'days_to_exp': days_to_exp,
-            'net': net,
-            'net_diff': net_diff
+    
+    session, base_url = session_result
+    
+    # Get target expiration dates (2 months)
+    target_expiries = get_target_expiration_dates()
+    print(f"DEBUG: {ticker} - Checking {len(target_expiries)} expiration dates")
+    
+    all_candidates = []
+    
+    for target_expiry in target_expiries:
+        # Build option chain URL with specific expiration
+        option_url = f"{base_url}/v1/market/optionchains"
+        params = {
+            'symbol': ticker,
+            'chainType': 'PUT',
+            'expiryDay': target_expiry.day,
+            'expiryMonth': target_expiry.month,
+            'expiryYear': target_expiry.year
         }
-        exp_map.setdefault(exp_date, []).append(put)
-        all_puts_raw.append(put)
-
-    # Only consider expirations with at least 14 days left
-    min_days_to_exp = 14
-    future_exps = sorted([d for d in exp_map if (d - today).days >= min_days_to_exp])
-    # Use up to two expirations
-    exps_to_consider = future_exps[:2]
-
-
-    # --- Adaptive Strike Selection ---
-    # Configurable parameters
-    min_pct = 0.15  # 15% above current price
-    max_pct = 0.40  # 40% above current price
-    min_strikes = 6
-
-    # 1. Try proportional range
-    min_strike = current_price * (1 + min_pct)
-    max_strike = current_price * (1 + max_pct)
-    puts_in_range = [p for p in all_puts_raw if p['strike'] is not None and min_strike <= p['strike'] <= max_strike]
-
-    # 2. If not enough, use all strikes above current price (for nearest expiry)
-    if len(puts_in_range) < min_strikes:
-        # Find nearest expiry with puts
-        if exps_to_consider:
-            nearest_exp = exps_to_consider[0]
-            puts_in_range = [p for p in exp_map[nearest_exp] if p['strike'] is not None and p['strike'] > current_price]
-
-    # 3. If still not enough, use all strikes for both months
-    if len(puts_in_range) < min_strikes:
-        puts_in_range = [p for p in all_puts_raw if p['strike'] is not None]
-
-    # Pick best premium-per-day put (net < current price)
-    best_put = None
-    best_yield = float('-inf')
-    for p in puts_in_range:
-        if p['net'] is not None and p['net'] < current_price and p['days_to_exp'] > 0 and p['premium']:
-            yield_per_day = p['premium'] / p['days_to_exp']
-            if yield_per_day > best_yield:
-                best_yield = yield_per_day
-                best_put = p
-
-    # If no best_put found, pick the closest strike to current price as fallback target
-    if not best_put:
-        # Try to pick the put with strike just above current price
-        puts_sorted = sorted([p for p in puts_in_range if p['strike'] is not None], key=lambda p: abs(p['strike'] - current_price))
-        if puts_sorted:
-            best_put = puts_sorted[0]
-        else:
-            # If still nothing, try all puts
-            puts_sorted = sorted([p for p in all_puts_raw if p['strike'] is not None], key=lambda p: abs(p['strike'] - current_price))
-            if puts_sorted:
-                best_put = puts_sorted[0]
+        
+        try:
+            print(f"DEBUG: {ticker} - Fetching options for {target_expiry}")
+            response = session.get(option_url, params=params)
+            
+            if response.status_code == 200:
+                options = parse_xml_option_pairs(response.text)
+                print(f"DEBUG: {ticker} - Found {len(options)} put options for {target_expiry}")
+                
+                # Filter options within ±$10 of current price and calculate negative premiums
+                days_to_expiry = (target_expiry - date.today()).days
+                
+                for opt in options:
+                    strike = opt['strike']
+                    bid = opt['bid']
+                    
+                    # Check if within ±$10 range
+                    if abs(strike - current_price) <= 10.0 and bid > 0:
+                        net_cost_basis = strike - bid
+                        negative_premium = current_price - net_cost_basis
+                        
+                        # Only include if it's a true negative premium (profitable if assigned)
+                        if negative_premium > 0:
+                            probability = calculate_probability_above_strike(current_price, strike, days_to_expiry)
+                            
+                            candidate = {
+                                'strike': strike,
+                                'premium': bid,
+                                'expiration': target_expiry.strftime('%m/%d'),
+                                'net_cost_basis': net_cost_basis,
+                                'negative_premium_amount': negative_premium,
+                                'net_diff': negative_premium,  # GUI expects this field name
+                                'probability_above_strike': probability,
+                                'days_to_expiry': days_to_expiry,
+                                'expiry_date': target_expiry
+                            }
+                            all_candidates.append(candidate)
+                            
             else:
-                # No puts at all, return [None, None, None]
-                return [None, None, None]
+                print(f"ERROR: {ticker} - API request failed for {target_expiry}: {response.status_code}")
+                
+        except Exception as e:
+            print(f"ERROR: {ticker} - Exception fetching {target_expiry}: {e}")
+    
+    if not all_candidates:
+        print(f"INFO: {ticker} - No negative premium opportunities found")
+        return []
+    
+    # Calculate combined score: premium income + negative premium protection
+    for candidate in all_candidates:
+        premium_income = candidate['premium']
+        negative_premium = candidate['negative_premium_amount']
+        probability = candidate['probability_above_strike']
+        
+        # Expected value calculation:
+        # (Premium if not assigned * probability) + (Negative premium value if assigned * (1-probability))
+        expected_value = (premium_income * probability) + (negative_premium * (1 - probability))
+        
+        # Also consider pure premium income potential
+        premium_yield = (premium_income / candidate['strike']) * 100  # Annualized percentage
+        
+        # Combined score favors high premium with decent protection
+        combined_score = (premium_income * 0.6) + (negative_premium * 0.4)
+        
+        candidate['expected_value'] = expected_value
+        candidate['premium_yield'] = premium_yield
+        candidate['combined_score'] = combined_score
+    
+    # Sort by combined score (favoring premium income but with negative premium protection)
+    all_candidates.sort(key=lambda x: x['combined_score'], reverse=True)
+    
+    # Return top 3 candidates
+    best_candidates = all_candidates[:3]
+    
+    print(f"SUCCESS: {ticker} - Found {len(all_candidates)} negative premium options, returning top {len(best_candidates)}")
+    for i, candidate in enumerate(best_candidates):
+        print(f"  {i+1}: ${candidate['strike']} put @ ${candidate['premium']:.2f} -> Premium: ${candidate['premium']:.2f} | If assigned: ${candidate['net_cost_basis']:.2f} (${candidate['negative_premium_amount']:.2f} negative) | Score: {candidate['combined_score']:.2f}")
+    
+    return best_candidates
 
 
+def get_third_friday(year, month):
+    """Calculate the 3rd Friday of the given month and year"""
+    first_day = date(year, month, 1)
+    first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
+    third_friday = first_friday + timedelta(days=14)
+    return third_friday
 
 
-    # Find closest below and above strikes from ALL available strikes (all expirations), but only valid puts
-    def is_valid_put(p):
-        return (
-            p['strike'] is not None and
-            p['premium'] is not None and
-            p['days_to_exp'] > 0
-        )
+def calculate_trading_days(start_date, end_date):
+    """Calculate trading days between start and end date (excludes weekends)"""
+    if start_date >= end_date:
+        return 0
+    
+    trading_days = 0
+    current = start_date + timedelta(days=1)
+    
+    while current <= end_date:
+        if current.weekday() < 5:  # Monday=0, Friday=4
+            trading_days += 1
+        current += timedelta(days=1)
+    
+    return trading_days
 
-    all_strikes_sorted = sorted(
-        [p for p in all_puts_raw if p['strike'] is not None],
-        key=lambda p: (p['strike'], p['days_to_exp'])
-    )
-    target_strike = best_put['strike']
-    below = None
-    above = None
-    # Always show the next strike below and above the target, even if not tradable
-    for p in reversed(all_strikes_sorted):
-        if p['strike'] < target_strike:
-            below = p
-            break
-    for p in all_strikes_sorted:
-        if p['strike'] > target_strike:
-            above = p
-            break
-    target = best_put
-    # If there is only one put, below/above may be None, that's fine
-    return [below, target, above]
 
-    # Show only puts with net assignment cost ABOVE current price
-    filtered = [p for p in puts if p['net'] is not None and p['net'] > current_price]
-    filtered.sort(key=lambda x: x['net_diff'])
-
-    if filtered:
-        result = filtered[:num_results]
-    else:
-        puts.sort(key=lambda p: abs(p['net'] - current_price))
-        result = puts[:num_results]
-
-    for p in result:
-        print(f"AMD Sep25 Put Strike: {p['strike']} | Bid: {p['bid']} | Ask: {p['ask']} | Mid: {p['premium']:.2f}")
-
-    return result
+def parse_xml_option_pairs(xml_response):
+    """Parse the XML response to extract option data"""
+    options = []
+    try:
+        root = ET.fromstring(xml_response)
+        
+        # Find all OptionPair elements
+        for option_pair in root.findall('.//OptionPair'):
+            put_element = option_pair.find('Put')
+            if put_element is not None:
+                symbol = put_element.find('displaySymbol')
+                bid = put_element.find('bid')
+                ask = put_element.find('ask')
+                strike = put_element.find('strikePrice')
+                
+                if all(elem is not None for elem in [symbol, bid, ask, strike]):
+                    symbol_text = symbol.text
+                    bid_value = float(bid.text) if bid.text and bid.text != '0' else 0.0
+                    ask_value = float(ask.text) if ask.text and ask.text != '0' else 0.0
+                    strike_value = float(strike.text)
+                    
+                    # Only include options with valid bids
+                    if bid_value > 0:
+                        options.append({
+                            'symbol': symbol_text,
+                            'strike': strike_value,
+                            'bid': bid_value,
+                            'ask': ask_value
+                        })
+                        
+    except ET.ParseError as e:
+        print(f"Error parsing XML response: {e}")
+    except Exception as e:
+        print(f"Error extracting option data: {e}")
+    
+    return options
