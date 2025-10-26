@@ -28,6 +28,7 @@ import time
 import webbrowser
 
 from core.paper_trader import paper_trader, Trade
+from ui.trade_history_editor import open_trade_history_editor
 
 class TradeDisplayWindow:
     """
@@ -93,6 +94,23 @@ class TradeDisplayWindow:
         )
         title_label.pack(side='left')
         
+        # Add Trade History Editor button
+        history_button = tk.Button(
+            title_frame,
+            text="📊 Trade History Editor",
+            font=self.fonts['body'],
+            fg=self.colors['text_white'],
+            bg=self.colors['accent_purple'],
+            activebackground=self.colors['neutral_blue'],
+            activeforeground=self.colors['text_white'],
+            relief='raised',
+            bd=2,
+            padx=15,
+            pady=5,
+            command=self.open_trade_history_editor
+        )
+        history_button.pack(side='right', padx=5)
+        
         # Add web dashboard button
         web_button = tk.Button(
             title_frame,
@@ -108,7 +126,7 @@ class TradeDisplayWindow:
             pady=5,
             command=self.open_web_dashboard
         )
-        web_button.pack(side='right', padx=10)
+        web_button.pack(side='right', padx=5)
         
         # Create main container with scrollable frame
         main_container = tk.Frame(self.root, bg=self.colors['bg_dark'])
@@ -198,14 +216,26 @@ class TradeDisplayWindow:
         active_frame.pack(fill='x', pady=5)
         
         # Create treeview for active trades
-        columns = ('Ticker', 'Direction', 'Qty', 'Entry Price', 'Current Price', 'Unrealized P&L', 'Open Time')
+        columns = ('Ticker', 'Direction', 'Qty', 'Entry Price', 'Current Price', 'Stop Loss', 'Take Profit', 'Unrealized P&L', 'Open Time')
         
         self.active_tree = ttk.Treeview(active_frame, columns=columns, show='headings', height=6)
         
-        # Configure columns
+        # Configure columns with specific widths
+        column_widths = {
+            'Ticker': 80,
+            'Direction': 80,
+            'Qty': 60,
+            'Entry Price': 100,
+            'Current Price': 100,
+            'Stop Loss': 100,
+            'Take Profit': 100,
+            'Unrealized P&L': 120,
+            'Open Time': 100
+        }
+        
         for col in columns:
             self.active_tree.heading(col, text=col)
-            self.active_tree.column(col, width=120, anchor='center')
+            self.active_tree.column(col, width=column_widths.get(col, 100), anchor='center')
         
         # Configure treeview style
         style = ttk.Style()
@@ -236,13 +266,13 @@ class TradeDisplayWindow:
         recent_frame.pack(fill='both', expand=True, pady=5)
         
         # Create treeview for recent trades
-        columns = ('Trade ID', 'Ticker', 'Direction', 'Qty', 'Entry', 'Exit', 'P&L', 'P&L%', 'Duration', 'Status')
+        columns = ('Trade ID', 'Ticker', 'Direction', 'Qty', 'Entry', 'Exit', 'P&L', 'P&L%', 'Duration', 'Close Time', 'Status')
         
         self.recent_tree = ttk.Treeview(recent_frame, columns=columns, show='headings', height=10)
         
         # Configure columns
         column_widths = {'Trade ID': 100, 'Ticker': 60, 'Direction': 80, 'Qty': 60, 
-                        'Entry': 80, 'Exit': 80, 'P&L': 100, 'P&L%': 80, 'Duration': 100, 'Status': 120}
+                        'Entry': 80, 'Exit': 80, 'P&L': 100, 'P&L%': 80, 'Duration': 100, 'Close Time': 100, 'Status': 120}
         
         for col in columns:
             self.recent_tree.heading(col, text=col)
@@ -281,16 +311,36 @@ class TradeDisplayWindow:
             fg=today_color
         )
         
-        # Win rate
-        win_rate_color = self.colors['profit_green'] if summary['win_rate'] >= 50 else self.colors['warning_orange']
+        # Win rate - shows actual P&L performance as percentage of initial balance
+        # Positive = making money, Negative = losing money, N/A = no trades yet
+        if summary['win_rate'] is None:
+            win_rate_text = "🎯 Return: N/A"
+            win_rate_color = self.colors['text_gray']
+        else:
+            # Format with + or - sign
+            win_rate_text = f"🎯 Return: {summary['win_rate']:+.2f}%"
+            # Color based on positive (green) or negative (red)
+            if summary['win_rate'] > 0:
+                win_rate_color = self.colors['profit_green']
+            elif summary['win_rate'] < 0:
+                win_rate_color = self.colors['loss_red']
+            else:
+                win_rate_color = self.colors['text_gray']  # Exactly 0
+        
         self.perf_labels['win_rate'].config(
-            text=f"🎯 Win Rate: {summary['win_rate']:.1f}%",
+            text=win_rate_text,
             fg=win_rate_color
         )
         
-        # Total trades
+        # Total trades - include breakeven count
+        breakeven = summary.get('breakeven_trades', 0)
+        trades_text = f"📋 Total Trades: {summary['total_trades']} ({summary['winning_trades']}W/{summary['losing_trades']}L"
+        if breakeven > 0:
+            trades_text += f"/{breakeven}BE"
+        trades_text += ")"
+        
         self.perf_labels['total_trades'].config(
-            text=f"📋 Total Trades: {summary['total_trades']} ({summary['winning_trades']}W/{summary['losing_trades']}L)",
+            text=trades_text,
             fg=self.colors['text_white']
         )
         
@@ -309,13 +359,19 @@ class TradeDisplayWindow:
         
         # Add active trades
         for trade in paper_trader.active_trades.values():
-            # Get current price (simulate for demo)
-            current_price = trade.open_price * (1 + (0.01 * (hash(trade.trade_id) % 21 - 10) / 10))
+            # Get REAL current price from Schwab API
+            try:
+                from data.schwab_market_data import schwab_data
+                quote = schwab_data.get_quote(trade.ticker)
+                current_price = quote.get('lastPrice', trade.open_price) if quote else trade.open_price
+            except Exception as e:
+                # Fallback to entry price if quote fails
+                current_price = trade.open_price
             
             # Calculate unrealized P&L
             if trade.direction == 'LONG':
                 unrealized_pnl = (current_price - trade.open_price) * trade.quantity
-            else:
+            else:  # SHORT
                 unrealized_pnl = (trade.open_price - current_price) * trade.quantity
             
             # Format values
@@ -325,6 +381,8 @@ class TradeDisplayWindow:
                 f"{trade.quantity:,}",
                 f"${trade.open_price:.2f}",
                 f"${current_price:.2f}",
+                f"${trade.stop_loss:.2f}",
+                f"${trade.take_profit:.2f}",
                 f"${unrealized_pnl:+.2f}",
                 trade.open_time.strftime("%m/%d %H:%M")
             )
@@ -379,6 +437,9 @@ class TradeDisplayWindow:
             }
             status_display = status_map.get(trade.status, trade.status)
             
+            # Format close time
+            close_time_str = trade.close_time.strftime("%m/%d %H:%M") if trade.close_time else "Active"
+            
             values = (
                 trade.trade_id,
                 trade.ticker,
@@ -389,6 +450,7 @@ class TradeDisplayWindow:
                 pnl_text,
                 pnl_percent_text,
                 duration_str,
+                close_time_str,
                 status_display
             )
             
@@ -408,6 +470,13 @@ class TradeDisplayWindow:
                 webbrowser.open("http://localhost:8051")
             except Exception as e:
                 print(f"Error opening web dashboard: {e}")
+    
+    def open_trade_history_editor(self):
+        """Open the trade history editor window"""
+        try:
+            open_trade_history_editor()
+        except Exception as e:
+            print(f"Error opening trade history editor: {e}")
     
     def update_display(self):
         """Update all display components"""

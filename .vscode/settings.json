@@ -16,12 +16,43 @@
     ],
     "python.analysis.memory.keepLibraryAst": false,
     
+    // Exclude virtual environments and archive directories from analysis
+    "python.analysis.exclude": [
+        "**/venv/**",
+        "**/venv312/**",
+        "**/homeassistant/**",
+        "**/archived_debug_files/**",
+        "**/archived_test_dev_files/**",
+        "**/archived_test_files_2025_oct26/**"
+    ],
+    
+    // Exclude from file explorer indexing (MAJOR performance boost)
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/venv": true,
+        "**/venv312": true,
+        "**/homeassistant": true,
+        "**/*.egg-info": true,
+        "**/archived_debug_files": true,
+        "**/archived_test_dev_files": true,
+        "**/archived_test_files_2025_oct26": true
+    },
+    
     // Reduce file watching overhead for your trading files
     "files.watcherExclude": {
         "**/.git/**": true,
         "**/node_modules/**": true,
         "**/__pycache__/**": true,
         "**/*.pyc": true,
+        "**/venv/**": true,
+        "**/venv312/**": true,
+        "**/homeassistant/**": true,
+        "**/build/**": true,
+        "**/*.egg-info/**": true,
+        "**/archived_debug_files/**": true,
+        "**/archived_test_dev_files/**": true,
+        "**/archived_test_files_2025_oct26/**": true,
         "**/backup_ticker_list_*.json": true,
         "**/fmp_daily_results_*.csv": true,
         "**/*_backup_*.xlsx": true,
@@ -48,6 +79,14 @@
         "**/node_modules": true,
         "**/__pycache__": true,
         "**/*.pyc": true,
+        "**/venv": true,
+        "**/venv312": true,
+        "**/homeassistant": true,
+        "**/build": true,
+        "**/*.egg-info": true,
+        "**/archived_debug_files": true,
+        "**/archived_test_dev_files": true,
+        "**/archived_test_files_2025_oct26": true,
         "**/backup_*": true,
         "**/*_BACKUP_*": true,
         "**/fmp_daily_results_*.csv": true
@@ -72,5 +111,23 @@
     "git.enabled": true,
     "git.autorefresh": false,
     "git.decorations.enabled": false,
-    "git.statusLimit": 5000
+    "git.statusLimit": 5000,
+    "claudeCodeChat.permissions.yoloMode": false,
+    
+    // === EXCEL FILE HANDLING ===
+    // Use Excel Viewer extension for Excel files
+    "workbench.editorAssociations": {
+        "*.xlsx": "gc-excelviewer-excel-editor",
+        "*.xls": "gc-excelviewer-excel-editor", 
+        "*.xlsm": "gc-excelviewer-excel-editor",
+        "*.xlsb": "gc-excelviewer-excel-editor"
+    },
+    
+    // Don't treat Excel files as text files
+    "files.associations": {
+        "*.xlsx": "",
+        "*.xls": "",
+        "*.xlsm": "",
+        "*.xlsb": ""
+    }
 }

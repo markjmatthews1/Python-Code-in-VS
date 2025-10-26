@@ -5,6 +5,11 @@ Live Trade Signal Generator
 
 Generates real-time trade setups with entry, exit, and stop-loss levels.
 Displays actual trading opportunities as they develop.
+
+Market Hours Awareness:
+- Only opens new trades during regular market hours (9:30 AM - 3:55 PM ET)
+- Closes all positions at 3:55 PM ET (before market close)
+- No trading on weekends or holidays
 """
 
 import pandas as pd
@@ -24,6 +29,9 @@ from core.paper_trader import paper_trader, Trade
 # Import enhanced risk manager
 from core.risk_manager import enhanced_risk_manager
 
+# Import market hours checker
+from utils.market_hours import should_open_new_trades, should_close_all_positions, get_market_status
+
 logger = logging.getLogger(__name__)
 
 class LiveTradeSignalGenerator:
@@ -33,31 +41,30 @@ class LiveTradeSignalGenerator:
     
     def __init__(self, watchlist=None):
         # Sector ETF watchlist for sector rotation trading
+        # FIX #2: REMOVED LOSING TICKERS (0% win rate): XLK, FTEC, XLF, XLC
+        # Keeping only profitable or neutral tickers based on analysis
         self.watchlist = watchlist or [
-            # Core Technology Sectors
-            'XLK',   # Technology Select Sector SPDR
-            'FTEC',  # Fidelity MSCI Information Technology ETF
+            # Technology - REMOVED XLK (0% win rate), REMOVED FTEC (0% win rate)
             'VGT',   # Vanguard Information Technology ETF
             
-            # Financial Services
-            'XLF',   # Financial Select Sector SPDR
+            # Financial Services - REMOVED XLF (0% win rate)
             'KBE',   # SPDR S&P Bank ETF
             'KRE',   # SPDR S&P Regional Banking ETF
             
-            # Healthcare & Biotech
-            'XLV',   # Health Care Select Sector SPDR
-            'IBB',   # iShares Biotechnology ETF
-            'XBI',   # SPDR S&P Biotech ETF
+            # Healthcare & Biotech - KEEP (good performance)
+            'XLV',   # Health Care Select Sector SPDR (40% win rate, needs work)
+            'IBB',   # iShares Biotechnology ETF (100% win rate! ✅)
+            'XBI',   # SPDR S&P Biotech ETF (100% win rate! ✅)
             
-            # Energy & Oil
+            # Energy & Oil - KEEP (OIH is excellent!)
             'XLE',   # Energy Select Sector SPDR
             'XOP',   # SPDR S&P Oil & Gas Exploration & Production ETF
-            'OIH',   # VanEck Oil Services ETF
+            'OIH',   # VanEck Oil Services ETF (75% win rate! ✅)
             
             # Consumer Sectors
             'XLY',   # Consumer Discretionary Select Sector SPDR
             'XLP',   # Consumer Staples Select Sector SPDR
-            'XRT',   # SPDR S&P Retail ETF
+            'XRT',   # SPDR S&P Retail ETF (100% win rate! ✅)
             
             # Industrial & Materials
             'XLI',   # Industrial Select Sector SPDR
@@ -69,23 +76,23 @@ class LiveTradeSignalGenerator:
             'VNQ',   # Vanguard Real Estate ETF
             'XLU',   # Utilities Select Sector SPDR
             
-            # Communications
-            'XLC',   # Communication Services Select Sector SPDR
-            'IYZ'    # iShares U.S. Telecommunications ETF
+            # Communications - REMOVED XLC (0% win rate)
+            'IYZ'    # iShares U.S. Telecommunications ETF (100% win rate! ✅)
         ]
         
         self.active_signals = []
         self.signal_history = []
         
-        # Enhanced signal parameters - Made more sensitive for demo
+        # FIX #3: INCREASED SIGNAL THRESHOLD - Require higher quality signals
+        # Enhanced signal parameters
         self.rsi_oversold = 45  # Was 30
         self.rsi_overbought = 55  # Was 70  
-        self.volume_threshold = 1.2  # 120% of average volume (was 150%)
-        self.min_signal_strength = 0.50  # Require 50% confidence minimum
+        self.volume_threshold = 1.5  # FIX #3b: Increased from 1.2 to 1.5 (150% of average)
+        self.min_signal_strength = 0.65  # FIX #3: Increased from 0.50 - only high-confidence signals
         
         # Risk management parameters  
         self.target_pct = 0.008  # 0.8% target
-        self.stop_pct = 0.004    # 0.4% stop (2:1 ratio)
+        self.stop_pct = 0.004    # 0.4% stop (2:1 ratio) - Will be replaced by ATR-based stops
         
     def get_market_data(self, symbol: str, period='5d', interval='1m') -> pd.DataFrame:
         """Get real-time market data using Schwab API"""
@@ -194,6 +201,10 @@ class LiveTradeSignalGenerator:
         """Generate complete trade setup with entry, exit, stop levels"""
         if data.empty:
             return None
+        
+        # FIX #4: ADD TREND FILTER - Calculate 20-period SMA
+        if 'SMA_20' not in data.columns:
+            data['SMA_20'] = data['Close'].rolling(window=20).mean()
             
         signal_strength = self.calculate_signal_strength(data)
         
@@ -204,31 +215,61 @@ class LiveTradeSignalGenerator:
         current_price = latest['Close']
         atr = latest['ATR']
         
+        # FIX #4: TREND FILTER - Only LONG when price is above 20-period SMA
+        sma_20 = latest['SMA_20']
+        if pd.notna(sma_20) and current_price < sma_20:
+            # Price below trend - skip this trade (avoid counter-trend)
+            logger.debug(f"Skipping {symbol}: Price ${current_price:.2f} below SMA20 ${sma_20:.2f}")
+            return None
+        
+        # FIX #5: TIME FILTER - Only trade morning hours (9:30 AM - 12:00 PM ET)
+        # Afternoon trading has only 16.7% win rate vs 47.4% in morning
+        from datetime import datetime
+        current_time = datetime.now()
+        current_hour = current_time.hour
+        current_minute = current_time.minute
+        
+        # Skip if before 9:30 AM or after 12:00 PM
+        if current_hour < 9 or (current_hour == 9 and current_minute < 30):
+            logger.debug(f"Skipping {symbol}: Before market open (9:30 AM)")
+            return None
+        if current_hour >= 12:
+            logger.debug(f"Skipping {symbol}: After 12:00 PM (afternoon trades have 16.7% win rate)")
+            return None
+        
         # Determine direction - Made more flexible for demo
         rsi = latest['RSI']
         macd = latest['MACD']
         macd_signal = latest['MACD_signal']
         
-        # Generate signals for demonstration
+        # FIX #6: ATR-BASED STOP LOSSES - Use 2x ATR for stops (wider, more forgiving)
+        # This prevents stops being hit on normal market noise
+        atr_pct = (atr / current_price)  # ATR as percentage of price
+        stop_distance_pct = max(atr_pct * 2.0, 0.006)  # At least 0.6%, or 2x ATR (whichever is larger)
+        target_distance_pct = stop_distance_pct * 2.0  # Maintain 2:1 risk/reward
+        
+        # FIX #1: DISABLE SHORT TRADES - They have 25% win rate vs 54.5% for LONG
+        # Only generate LONG (BUY) signals
         if rsi < self.rsi_overbought and macd > macd_signal:
             direction = "BUY"
             entry_price = current_price
-            stop_loss = entry_price * (1 - self.stop_pct)
-            take_profit = entry_price * (1 + self.target_pct)
+            stop_loss = entry_price * (1 - stop_distance_pct)
+            take_profit = entry_price * (1 + target_distance_pct)
             
-        elif rsi > self.rsi_oversold and macd < macd_signal:
-            direction = "SELL"  
-            entry_price = current_price
-            stop_loss = entry_price * (1 + self.stop_pct)
-            take_profit = entry_price * (1 - self.target_pct)
+        # DISABLED: SHORT signals removed due to poor performance
+        # elif rsi > self.rsi_oversold and macd < macd_signal:
+        #     direction = "SELL"  
+        #     entry_price = current_price
+        #     stop_loss = entry_price * (1 + self.stop_pct)
+        #     take_profit = entry_price * (1 - self.target_pct)
             
         else:
-            # If no clear signal, create a neutral BUY signal for demo
+            # If no clear BUY signal, create one for signals with decent strength
             if signal_strength > 0.25:  # Very low threshold for demo
                 direction = "BUY"
                 entry_price = current_price
-                stop_loss = entry_price * (1 - self.stop_pct)
-                take_profit = entry_price * (1 + self.target_pct)
+                stop_loss = entry_price * (1 - stop_distance_pct)
+                take_profit = entry_price * (1 + target_distance_pct)
             else:
                 return None
         
@@ -243,6 +284,24 @@ class LiveTradeSignalGenerator:
         
         if position_size == 0 or not position_calc['valid']:
             return None
+        
+        # FIX: Determine actual trade direction (paper_trader converts BUY->LONG, SELL->SHORT)
+        # The paper_trader uses NORMAL logic: BUY->LONG, SELL->SHORT
+        # Check if this is actually going to be a SHORT trade
+        will_be_short_trade = (direction == "SELL")  # SELL signals become SHORT trades
+        
+        if will_be_short_trade:
+            # For SHORT trades: Stop should be ABOVE entry, Take Profit BELOW entry
+            actual_stop_loss = entry_price * (1 + risk_manager.default_stop_pct)
+            actual_take_profit = entry_price * (1 - risk_manager.default_target_pct)
+            potential_profit = (entry_price - actual_take_profit) * position_size
+            potential_loss = (actual_stop_loss - entry_price) * position_size
+        else:
+            # For LONG trades (SELL signals): Use risk manager values as-is
+            actual_stop_loss = position_calc['stop_loss_price']
+            actual_take_profit = position_calc['target_price']
+            potential_profit = (actual_take_profit - entry_price) * position_size
+            potential_loss = (entry_price - actual_stop_loss) * position_size
             
         setup = {
             'timestamp': datetime.now().isoformat(),
@@ -250,13 +309,13 @@ class LiveTradeSignalGenerator:
             'direction': direction,
             'signal_strength': round(signal_strength, 3),
             'entry_price': round(entry_price, 2),
-            'stop_loss': round(position_calc['stop_loss_price'], 2),
-            'take_profit': round(position_calc['target_price'], 2),
+            'stop_loss': round(actual_stop_loss, 2),
+            'take_profit': round(actual_take_profit, 2),
             'position_size': position_size,
             'position_value': round(position_calc['position_value'], 2),
             'risk_amount': round(risk_amount, 2),
-            'potential_profit': round((position_calc['target_price'] - entry_price) * position_size, 2),
-            'potential_loss': round((entry_price - position_calc['stop_loss_price']) * position_size, 2),
+            'potential_profit': round(potential_profit, 2),
+            'potential_loss': round(potential_loss, 2),
             'risk_reward_ratio': position_calc['risk_reward_ratio'],
             'rsi': round(rsi, 1),
             'macd': round(macd, 4),
@@ -269,6 +328,50 @@ class LiveTradeSignalGenerator:
     async def scan_for_signals(self) -> List[Dict]:
         """Scan watchlist for trade setups"""
         signals = []
+        
+        # Check market hours status
+        market_status = get_market_status()
+        can_trade, trade_msg = should_open_new_trades()
+        must_close, close_msg = should_close_all_positions()
+        
+        # Log market status
+        logger.info(f"Market Status: {market_status['market_message']}")
+        
+        # Handle end-of-day position closing
+        if must_close:
+            active_count = len(paper_trader.active_trades)
+            if active_count > 0:
+                logger.warning(f"🔔 {close_msg} - Closing {active_count} open position(s)")
+                
+                # Close all active positions at market
+                for trade_id, trade in list(paper_trader.active_trades.items()):
+                    try:
+                        # Get current price for this ticker
+                        data = self.get_market_data(trade.ticker, period='1d', interval='1m')
+                        if not data.empty:
+                            current_price = data['Close'].iloc[-1]
+                            paper_trader.close_trade(trade_id, current_price, "End of day - market closing")
+                            logger.info(f"✅ Closed {trade.ticker} position at ${current_price:.2f}")
+                        else:
+                            # Use last known price if we can't get current
+                            paper_trader.close_trade(trade_id, trade.entry_price, "End of day - using entry price")
+                            logger.warning(f"⚠️ Closed {trade.ticker} at entry price (no current data)")
+                    except Exception as e:
+                        logger.error(f"Error closing {trade.ticker}: {e}")
+                
+                logger.info("🔒 All positions closed for end of day")
+            else:
+                logger.info(f"✅ {close_msg} - No open positions to close")
+            
+            # Don't scan for new signals when closing positions
+            return signals
+        
+        # Check if we can open new trades
+        if not can_trade:
+            logger.info(f"⏸️ Not scanning for trades: {trade_msg}")
+            return signals
+        
+        logger.info(f"✅ {trade_msg} - Scanning for trade opportunities")
         
         for symbol in self.watchlist:
             try:
@@ -283,21 +386,30 @@ class LiveTradeSignalGenerator:
                         
                         # Automatically open paper trade for good signals
                         if setup['signal_strength'] >= self.min_signal_strength:
-                            try:
-                                trade_signal = {
-                                    'symbol': setup['symbol'],
-                                    'direction': 'BUY' if setup['direction'] == 'LONG' else 'SELL',
-                                    'entry_price': setup['entry_price'],
-                                    'stop_loss': setup['stop_loss'],
-                                    'take_profit': setup['take_profit'],
-                                    'signal_strength': setup['signal_strength']
-                                }
-                                
-                                trade_id = paper_trader.open_trade(trade_signal)
-                                logger.info(f"🟢 Opened paper trade {trade_id} for {setup['symbol']}")
-                                
-                            except Exception as e:
-                                logger.error(f"Error opening paper trade for {symbol}: {e}")
+                            # Check if we already have an active position in this ticker
+                            has_active_position = any(
+                                trade.ticker == symbol 
+                                for trade in paper_trader.active_trades.values()
+                            )
+                            
+                            if has_active_position:
+                                logger.info(f"⏭️ Skipping {symbol} - already have active position")
+                            else:
+                                try:
+                                    trade_signal = {
+                                        'symbol': setup['symbol'],
+                                        'direction': setup['direction'],  # Pass through as-is (BUY or SELL)
+                                        'entry_price': setup['entry_price'],
+                                        'stop_loss': setup['stop_loss'],
+                                        'take_profit': setup['take_profit'],
+                                        'signal_strength': setup['signal_strength']
+                                    }
+                                    
+                                    trade_id = paper_trader.open_trade(trade_signal)
+                                    logger.info(f"🟢 Opened paper trade {trade_id} for {setup['symbol']}")
+                                    
+                                except Exception as e:
+                                    logger.error(f"Error opening paper trade for {symbol}: {e}")
                         
             except Exception as e:
                 logger.error(f"Error scanning {symbol}: {e}")
@@ -307,7 +419,13 @@ class LiveTradeSignalGenerator:
         
         # Monitor existing paper trades for stop loss/take profit
         try:
-            paper_trader.check_stop_loss_take_profit()
+            if len(paper_trader.active_trades) > 0:
+                logger.info(f"📊 Checking {len(paper_trader.active_trades)} active trades for stop/take triggers...")
+                closed_trades = paper_trader.check_stop_loss_take_profit()
+                if closed_trades:
+                    logger.info(f"✅ Closed {len(closed_trades)} trades via stop/take profit")
+                else:
+                    logger.debug(f"✅ All {len(paper_trader.active_trades)} trades within stop/take ranges")
         except Exception as e:
             logger.error(f"Error checking stop loss/take profit: {e}")
             

@@ -64,7 +64,29 @@ class SchwabMarketDataProvider:
         try:
             quote_data = fetch_quote(symbol)
             if quote_data and symbol in quote_data:
-                return quote_data[symbol]
+                raw_quote = quote_data[symbol]
+                
+                # Extract the actual price from the nested structure
+                # Schwab returns: quote_data[symbol]['quote']['lastPrice']
+                # or quote_data[symbol]['regular']['regularMarketLastPrice']
+                price = 0.0
+                
+                # Try regular market price first (most reliable during market hours)
+                if 'regular' in raw_quote and 'regularMarketLastPrice' in raw_quote['regular']:
+                    price = raw_quote['regular']['regularMarketLastPrice']
+                # Fall back to quote.lastPrice
+                elif 'quote' in raw_quote and 'lastPrice' in raw_quote['quote']:
+                    price = raw_quote['quote']['lastPrice']
+                # Fall back to extended.lastPrice
+                elif 'extended' in raw_quote and 'lastPrice' in raw_quote['extended']:
+                    price = raw_quote['extended']['lastPrice']
+                
+                # Return simplified quote format expected by paper_trader
+                return {
+                    'lastPrice': price,
+                    'symbol': symbol,
+                    'raw': raw_quote  # Keep full data for debugging
+                }
             return {}
         except Exception as e:
             logger.error(f"Error getting quote for {symbol}: {e}")

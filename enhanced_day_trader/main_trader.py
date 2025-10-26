@@ -9,6 +9,8 @@ Complete day trading system with:
 - Beautiful colorful display with Arial 12+ fonts
 - Risk management and position sizing
 - Performance analytics
+- Market hours awareness (9:30 AM - 3:55 PM ET)
+- Automatic end-of-day position closing
 
 Author: GitHub Copilot
 Date: October 15, 2025
@@ -30,6 +32,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from live_signals import trade_signal_generator
 from core.paper_trader import paper_trader
 from ui.trade_display import create_trade_display
+from utils.market_hours import print_market_status, get_market_status
 
 # Set up logging with UTF-8 encoding
 logging.basicConfig(
@@ -199,10 +202,13 @@ def print_startup_banner():
     ⚡ Risk Management: 0.5% per trade, 50% min signal strength
     🎨 Native GUI: Arial 12+ fonts with colorful interface
     🌐 Web Dashboard: http://localhost:8051
-    
-    Starting dual interface system...
     """
     print(banner)
+    
+    # Show market hours status
+    print_market_status()
+    
+    print("Starting dual interface system...\n")
 
 def main():
     """Main application entry point"""
@@ -222,7 +228,13 @@ def main():
         print(f"\nCurrent Portfolio Status:")
         print(f"   Balance: ${summary['current_balance']:,.2f}")
         print(f"   Total P&L: {summary['total_pnl']:+,.2f} ({summary['total_return_percent']:+.1f}%)")
-        print(f"   Win Rate: {summary['win_rate']:.1f}%")
+        
+        # Handle None values for return rate (when no trades yet)
+        if summary['win_rate'] is None:
+            print(f"   Return: N/A")
+        else:
+            print(f"   Return: {summary['win_rate']:+.2f}%")
+        
         print(f"   Active Positions: {summary['active_positions']}")
         print(f"   Total Trades: {summary['total_trades']}\n")
         

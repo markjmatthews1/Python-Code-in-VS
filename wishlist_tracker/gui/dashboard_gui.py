@@ -19,6 +19,7 @@ if PROJECT_ROOT not in sys.path:
 from wishlist_tracker.utils.watchlist_manager import load_watchlist
 from wishlist_tracker.utils.etrade_data import fetch_and_update_watchlist
 from wishlist_tracker.utils.option_chain import fetch_put_option_chain
+from wishlist_tracker.utils.market_hours import get_market_status_display
 
 WATCHLIST_CSV = os.path.join(os.path.dirname(__file__), '..', 'data', 'watchlist.csv')
 
@@ -30,16 +31,35 @@ class DashboardGUI:
         master.configure(bg="#e3f0ff")
 
         # Header frame with fixed height to prevent expansion
-        header_frame = tk.Frame(master, bg="#e3f0ff", height=60)
+        header_frame = tk.Frame(master, bg="#e3f0ff", height=80)  # Increased height for market status
         header_frame.pack(fill=tk.X, pady=10, padx=20)
         header_frame.pack_propagate(False)  # Prevent children from affecting frame size
         
         # Store reference to master for spinner overlay
         self.master_frame = master
         
-        # Left side - Empty space (spinner will be overlaid)
-        left_spacer = tk.Label(header_frame, text="", bg="#e3f0ff", width=8)
-        left_spacer.pack(side=tk.LEFT)
+        # Left side - Market Status Indicator
+        self.market_status_frame = tk.Frame(header_frame, bg="#e3f0ff")
+        self.market_status_frame.pack(side=tk.LEFT, padx=10)
+        
+        self.market_status_label = tk.Label(
+            self.market_status_frame,
+            text="Checking market...",
+            font=("Segoe UI", 10, "bold"),
+            bg="#e3f0ff",
+            fg="#666666"
+        )
+        self.market_status_label.pack(anchor="w")
+        
+        self.market_warning_label = tk.Label(
+            self.market_status_frame,
+            text="",
+            font=("Arial", 9),
+            bg="#e3f0ff",
+            fg="#ff6600",
+            wraplength=200
+        )
+        self.market_warning_label.pack(anchor="w")
         
         # Center - Title
         self.title_label = tk.Label(header_frame, text="Wishlist Tracker Dashboard", font=("Segoe UI", 18, "bold"), bg="#e3f0ff", fg="#232946")
@@ -68,23 +88,17 @@ class DashboardGUI:
         tk.Button(btn_frame, text="Refresh Data", command=self.refresh_data, bg="#a3cef1", fg="#232946", font=("Segoe UI", 11, "bold"), width=14).pack(side=tk.LEFT, padx=5)
         tk.Button(btn_frame, text="Manage Tickers", command=self.open_ticker_manager, bg="#b8c1ec", fg="#232946", font=("Segoe UI", 11, "bold"), width=14).pack(side=tk.LEFT, padx=5)
 
-        # Table
-        columns = ("Symbol", "Current Price", "52W High", "52W Low", "Premium", "Put Below", "Put Target", "Put Above", "Trend/Entry", "Entry Price", "Exit Price", "Stop Loss", "Notes")
+        # Table - UPDATED for Enhanced Scoring + ROI metrics + Liquidity + Technical Indicators
+        columns = ("Symbol", "Current Price", "52W High", "52W Low", "Top #1 (Score)", "Score", "Daily ROI %", "Total $", "Days", "Liq", "Top #2", "Top #3", "Trend", "Notes")
         self.tree = ttk.Treeview(master, columns=columns, show="headings", height=25)
-        col_widths = [90, 110, 110, 110, 124, 140, 160, 140, 120, 110, 110, 110, 180]  # Put Target now 160 (was 148)
+        col_widths = [80, 110, 110, 110, 180, 60, 90, 90, 60, 60, 180, 180, 160, 180]  # Added Score column (60px)
         
-        # NUCLEAR OPTION: Force exact column sizes with minwidth=width to prevent shrinking
+        # Configure column widths
         for col, width in zip(columns, col_widths):
             self.tree.heading(col, text=col)
-            # Set minwidth=width to prevent columns from shrinking below target size
             self.tree.column(col, width=width, minwidth=width, stretch=False, anchor="center")
         
         self.tree.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-        
-        # Extra enforcement for Put Target column - make it exactly 160 pixels
-        self.tree.column("Put Target", width=160, minwidth=160, stretch=False, anchor="center")
-        
-        print("🔧 [WISHLIST] Put Target column header reverted to standard size")
 
         # Bind to window events to continuously enforce column width
         self.master.bind('<Configure>', self.on_window_resize)
@@ -102,25 +116,76 @@ class DashboardGUI:
         style.configure("Treeview",
                         background="#b8c1ec",
                         foreground="#232946",
-                        rowheight=25,
+                        rowheight=28,  # Increased for better readability
                         fieldbackground="#b8c1ec",
-                        font=("Segoe UI", 11))
+                        font=("Arial", 12))  # PHASE 1: Increased to 12pt
         style.configure("Treeview.Heading",
                         background="#232946",
                         foreground="#b8c1ec",
-                        font=("Segoe UI", 12, "bold"))
+                        font=("Arial", 12, "bold"))  # PHASE 1: Arial 12pt
         style.map('Treeview', background=[('selected', '#a3cef1')])
+        
+        # Define color tags for ROI-based row coloring
+        self.tree.tag_configure('excellent', background='#90EE90')  # Green - ROI >= 0.40%
+        self.tree.tag_configure('good', background='#FFFF99')       # Yellow - ROI 0.33-0.40%
+        self.tree.tag_configure('marginal', background='#FFB366')   # Orange - ROI < 0.33%
+        self.tree.tag_configure('no_data', background='#D3D3D3')    # Gray - No data
 
+        # Update market status display
+        self.update_market_status()
+        
         # Automatically start data refresh on startup (no manual button click needed)
         print("🚀 [WISHLIST] Starting automatic data refresh on app startup...")
         self.master.after(500, self.refresh_data)  # Small delay to ensure GUI is ready
+
+    def update_market_status(self):
+        """Update the market status indicator in the header"""
+        try:
+            status = get_market_status_display()
+            
+            # Color mapping
+            color_map = {
+                'green': '#00aa00',    # Market open
+                'yellow': '#ff9900',   # After hours
+                'orange': '#ff6600',   # Pre-market
+                'red': '#cc0000'       # Weekend
+            }
+            
+            status_color = color_map.get(status['color'], '#666666')
+            
+            # Update status text with emoji
+            status_emoji = {
+                'OPEN': '🟢',
+                'PRE_MARKET': '🟡',
+                'AFTER_HOURS': '🟠',
+                'WEEKEND': '🔴'
+            }
+            emoji = status_emoji.get(status['state'], '⚪')
+            
+            self.market_status_label.config(
+                text=f"{emoji} {status['status_text']}",
+                fg=status_color
+            )
+            
+            # Show warning if market is closed
+            if status['warning']:
+                self.market_warning_label.config(text=status['warning'])
+            else:
+                self.market_warning_label.config(text="")
+                
+        except Exception as e:
+            print(f"Error updating market status: {e}")
+            self.market_status_label.config(text="⚪ Market status unknown", fg="#666666")
+        
+        # Refresh market status every 60 seconds
+        self.master.after(60000, self.update_market_status)
 
     def start_spinner(self):
         """Start the spinning wheel animation as overlay"""
         self.spinner_active = True
         self.spinner_index = 0
-        # Position spinner overlay centered vertically in header (header height is 60px, spinner needs to be centered)
-        self.spinner_overlay.place(x=30, y=5)  # Moved up to center in header frame
+        # Position spinner overlay centered vertically in header (header height is 80px now)
+        self.spinner_overlay.place(x=30, y=15)  # Adjusted for larger header
         # Remove title padding since spinner is now overlaid
         self.title_label.pack_configure(padx=(0, 0))
         self._animate_spinner()
@@ -144,37 +209,30 @@ class DashboardGUI:
             self.master.after(200, self._animate_spinner)  # Update every 200ms
     
     def force_column_widths(self):
-        """Force column widths after GUI is fully loaded"""
-        columns = ("Symbol", "Current Price", "52W High", "52W Low", "Premium", "Put Below", "Put Target", "Put Above", "Trend/Entry", "Entry Price", "Exit Price", "Stop Loss", "Notes")
-        col_widths = [90, 110, 110, 110, 124, 140, 160, 140, 120, 110, 110, 110, 180]
+        """Force column widths after GUI is fully loaded - Phase 3: Updated for technical indicators"""
+        columns = ("Symbol", "Current Price", "52W High", "52W Low", "Top #1 (Score)", "Score", "Daily ROI %", "Total $", "Days", "Liq", "Top #2", "Top #3", "Trend", "Notes")
+        col_widths = [80, 110, 110, 110, 180, 90, 90, 60, 60, 180, 180, 160, 180]  # PHASE 3: Trend 160px for score display
         for col, width in zip(columns, col_widths):
-            # Force exact column sizes with minwidth=width to prevent shrinking
             self.tree.column(col, width=width, minwidth=width, stretch=False, anchor="center")
-        
-        # Extra aggressive enforcement on Put Target column
-        self.tree.column("Put Target", width=160, minwidth=160, stretch=False, anchor="center")
         
         # Force an immediate display update
         self.tree.update_idletasks()
         
-        # Set it again after the update to override any auto-sizing
-        self.tree.column("Put Target", width=160, minwidth=160, stretch=False, anchor="center")
+        print("✅ [WISHLIST] Column widths enforced for ROI-based display with liquidity")
         
-        print("✅ [WISHLIST] Column widths ENFORCED - Put Target: 160px (minwidth=160, stretch=False)")
-        
-        # Schedule continuous enforcement every 3 seconds to constantly override tkinter's auto-sizing
+        # Schedule continuous enforcement every 3 seconds
         self.master.after(3000, self.force_column_widths)
     
     def on_window_resize(self, event):
         """Handle window resize events by enforcing column widths"""
         if event.widget == self.master:
-            # Force column widths when window is resized
-            self.tree.column("Put Target", width=160, minwidth=160, stretch=False, anchor="center")
+            # Force column widths when window is resized (no specific column enforcement needed)
+            pass
     
     def on_tree_configure(self, event):
         """Handle tree configure events by enforcing column widths"""
-        # Force column widths when tree is reconfigured
-        self.tree.column("Put Target", width=160, minwidth=160, stretch=False, anchor="center")
+        # Force column widths when tree is reconfigured (no specific column enforcement needed)
+        pass
     
     def update_last_refresh_time(self):
         """Update the last refresh timestamp"""
@@ -357,7 +415,8 @@ class DashboardGUI:
             except Exception as e:
                 print(f"DEBUG: Exception fetching puts for {inst.symbol}: {e}")
                 puts = []
-            # puts: [below, target, above]
+            
+            # PHASE 1: ROI-based display (Top 3 by daily ROI)
             def fmt_money(val):
                 try:
                     return f"${float(val):,.2f}"
@@ -369,163 +428,194 @@ class DashboardGUI:
                 except:
                     return val
 
-            put_below = put_target = put_above = ""
-            premium_val = ""
-            if puts and len(puts) == 3:
-                below, target, above = puts
+            top1 = top2 = top3 = None
+            daily_roi = total_premium = days_to_exp = ""
+            
+            if puts and len(puts) >= 3:
+                top1, top2, top3 = puts[0], puts[1], puts[2]
             elif puts and len(puts) == 2:
-                below, target = puts[0], puts[1]
-                above = None
+                top1, top2 = puts[0], puts[1]
             elif puts and len(puts) == 1:
-                below = None
-                target = puts[0]
-                above = None
-            else:
-                below = target = above = None
+                top1 = puts[0]
 
-            def put_str(p, is_target=False):
+            def put_str_roi(p):
+                """Format put option string with ROI metrics and trend indicators"""
                 if not p:
-                    return "No Tradeable Options (Bid=$0.00)"
-                if p['premium'] is None:
-                    result = f"{p['strike']:.2f} @ No Market ({p['expiration']})"
-                else:
-                    result = f"{p['strike']:.2f} @ ${p['premium']:.2f} ({p['expiration']})"
+                    return ""
+                if p.get('premium') is None or p.get('premium') == 0:
+                    return f"${p['strike']:.2f} @ No Market"
                 
-                # No highlighting - just return the clean result
+                # Get trend strength from option data (if available from Phase 2)
+                trend_indicator = ""
+                if p.get('trend_strength'):
+                    strength = p['trend_strength']
+                    if strength >= 8:
+                        trend_indicator = " ⬆️⬆️⬆️"  # Strong uptrend
+                    elif strength >= 5:
+                        trend_indicator = " ⬆️⬆️"    # Moderate uptrend
+                    elif strength >= 3:
+                        trend_indicator = " ⬆️"      # Weak uptrend
+                
+                # Format: $55.00 @ $8.00 (11/21) ⬆️⬆️⬆️
+                exp_date = p.get('expiration', '')
+                result = f"${p['strike']:.2f} @ ${p['premium']:.2f} ({exp_date}){trend_indicator}"
+                
                 return result
 
-            if not puts or all(p is None for p in puts):
-                # No valid options found (all filtered out due to bid = $0.00)
-                put_below = put_target = put_above = "No Market (Bid=$0.00)"
-                premium_val = "No Market"
-                premium_val_num = float('inf')
-                no_options_count += 1  # Count tickers with no tradeable options
+            # Extract metrics from top option (for dedicated columns)
+            enhanced_score = ""
+            if top1 and top1.get('premium'):
+                daily_roi = f"{top1.get('daily_roi', 0):.2f}%"
+                total_premium = f"${top1.get('premium_dollars', 0):,.0f}"
+                days_to_exp = str(top1.get('days_to_expiry', ''))
+                liquidity_display = top1.get('liquidity_display', '')  # PHASE 2: Get liquidity
+                roi_for_sorting = top1.get('daily_roi', 0)
+                # ENHANCED: Get enhanced score (0-100 quality rating)
+                if top1.get('enhanced_score'):
+                    score_val = top1['enhanced_score']
+                    enhanced_score = f"{score_val:.0f}"
+                    # Update sorting to use enhanced score instead of just ROI
+                    roi_for_sorting = score_val  # Use enhanced score for sorting
             else:
-                put_below = put_str(below, is_target=False)
-                put_target = put_str(target, is_target=True)  # Highlight the target put
-                put_above = put_str(above, is_target=False)
+                liquidity_display = ""  # PHASE 2: No liquidity if no option
+                roi_for_sorting = 0
+            
+            # Format all three options
+            if not puts or all(p is None for p in puts):
+                top1_str = top2_str = top3_str = "No Market (Bid=$0.00)"
+                daily_roi = ""
+                total_premium = ""
+                days_to_exp = ""
+                liquidity_display = ""  # PHASE 2
+                enhanced_score = ""  # No score if no options
+                row_tag = 'no_data'
+                no_options_count += 1
+            else:
+                top1_str = put_str_roi(top1)
+                top2_str = put_str_roi(top2)
+                top3_str = put_str_roi(top3)
                 
-                if target and target['premium'] is not None and inst.current_price:
-                    try:
-                        # Enhanced premium calculation: Strike - Premium - Current Price
-                        # Example: $55 strike - $6 premium - $50 current = -$1 (extra cost)
-                        # Positive value = extra profit, Negative value = extra cost
-                        current_price_float = float(inst.current_price)
-                        strike_price = target['strike']
-                        premium_received = target['premium']
-                        
-                        premium_to_current = strike_price - premium_received - current_price_float
-                        premium_val_num = premium_to_current
-                        
-                        # Format with proper sign indication
-                        if premium_to_current >= 0:
-                            premium_val = f"+${premium_to_current:.2f}"  # Extra profit
-                        else:
-                            premium_val = f"-${abs(premium_to_current):.2f}"  # Extra cost
-                            
-                    except Exception:
-                        premium_val = ""
-                        premium_val_num = float('inf')
-                else:
-                    premium_val = ""
-                    premium_val_num = float('inf')
-
-            # --- Simple trend analysis using E*TRADE data (faster, non-blocking) ---
-            trend_entry = ""
-            try:
-                # Use simple price-based trend analysis as fallback
-                current_price = float(inst.current_price) if inst.current_price else 0
-                high_52wk = float(inst.high_52wk) if inst.high_52wk else 0
-                low_52wk = float(inst.low_52wk) if inst.low_52wk else 0
-                
-                if current_price > 0 and high_52wk > 0 and low_52wk > 0:
-                    # Simple momentum based on 52-week range position
-                    range_position = (current_price - low_52wk) / (high_52wk - low_52wk)
-                    
-                    if range_position > 0.7:  # In top 30% of 52-week range
-                        trend_entry = "Uptrend/Entry"
-                    elif range_position < 0.3:  # In bottom 30% of 52-week range
-                        trend_entry = "Downtrend/Avoid"
+                # ENHANCED: Determine row color based on enhanced score (0-100)
+                # Color coding: 80+ = Excellent (green), 60-79 = Good (yellow), <60 = Marginal (orange)
+                if top1 and top1.get('enhanced_score'):
+                    score_val = top1['enhanced_score']
+                    if score_val >= 80:
+                        row_tag = 'excellent'  # Green - High quality
+                    elif score_val >= 60:
+                        row_tag = 'good'       # Yellow - Good quality
                     else:
-                        trend_entry = "Neutral/Wait"
+                        row_tag = 'marginal'   # Orange - Lower quality
                 else:
-                    trend_entry = "Insufficient Data"
-            except Exception as e:
-                print(f"⚠️ [WISHLIST] Trend calc error for {inst.symbol}: {e}")
-                trend_entry = "Calc Error"
+                    # Fallback to ROI if no enhanced score
+                    if top1 and top1.get('daily_roi'):
+                        roi_val = top1['daily_roi']
+                        if roi_val >= 0.40:
+                            row_tag = 'excellent'  # Green
+                        elif roi_val >= 0.33:
+                            row_tag = 'good'       # Yellow
+                        else:
+                            row_tag = 'marginal'   # Orange
+                    else:
+                        row_tag = 'no_data'  # Gray
 
-            # Entry/Exit/Stop logic for uptrend
-            entry_price = exit_price = stop_loss = ""
-            if trend_entry == "Uptrend/Entry":
+            # --- PHASE 3: Enhanced Trend Analysis with Technical Indicators ---
+            trend_entry = ""
+            trend_score_for_sorting = 0
+            try:
+                from wishlist_tracker.utils.trend_analysis import get_trend_analysis
+                
+                # Get comprehensive technical analysis
+                trend = get_trend_analysis(inst.symbol, current_price=inst.current_price)
+                
+                # Format display: emoji + score + category
+                # Example: "🟢 85 UPTREND" or "🟡 50 Neutral"
+                trend_entry = f"{trend['emoji']} {trend['score']} {trend['display']}"
+                trend_score_for_sorting = trend['score']  # Use score for sorting (0-100)
+                
+            except Exception as e:
+                # Fallback to simple 52-week range analysis if Phase 3 fails
                 try:
-                    last_close = float(inst.current_price)
-                    entry_price = fmt_money(last_close)
-                    exit_price = fmt_money(last_close * 1.02)  # Example: 2% target
-                    stop_loss = fmt_money(last_close * 0.98)   # Example: 2% stop
-                except:
-                    pass
+                    current_price = float(inst.current_price) if inst.current_price else 0
+                    high_52wk = float(inst.high_52wk) if inst.high_52wk else 0
+                    low_52wk = float(inst.low_52wk) if inst.low_52wk else 0
+                    
+                    if current_price > 0 and high_52wk > 0 and low_52wk > 0:
+                        range_position = (current_price - low_52wk) / (high_52wk - low_52wk)
+                        
+                        if range_position > 0.7:
+                            trend_entry = "Uptrend ⬆️"
+                            trend_score_for_sorting = 70
+                        elif range_position < 0.3:
+                            trend_entry = "Downtrend ⬇️"
+                            trend_score_for_sorting = 20
+                        else:
+                            trend_entry = "Neutral ➡️"
+                            trend_score_for_sorting = 50
+                    else:
+                        trend_entry = "Insufficient Data"
+                        trend_score_for_sorting = 0
+                except Exception as fallback_error:
+                    print(f"⚠️ [WISHLIST] Trend calc error for {inst.symbol}: {fallback_error}")
+                    trend_entry = "Calc Error"
+                    trend_score_for_sorting = 0
+
+            # ENHANCED: Build row with enhanced score column
             row = (
                 inst.symbol,
                 fmt_money(inst.current_price) if inst.current_price else '',
                 fmt_money(getattr(inst, 'high_52wk', '')),
                 fmt_money(getattr(inst, 'low_52wk', '')),
-                premium_val,
-                put_below, put_target, put_above,
-                trend_entry,
-                entry_price, exit_price, stop_loss,
-                inst.notes or '',
-                premium_val_num,  # For primary sort (highest premium to current price)
-                1 if trend_entry == "Uptrend/Entry" else 0  # For secondary sort (uptrend priority)
+                top1_str,  # Top #1 (Score)
+                enhanced_score,  # Score (0-100 quality rating)
+                daily_roi,  # Daily ROI %
+                total_premium,  # Total $
+                days_to_exp,  # Days
+                liquidity_display,  # Liquidity score with color
+                top2_str,  # Top #2
+                top3_str,  # Top #3
+                trend_entry,  # Trend with technical score (e.g., "🟢 85 UPTREND")
+                inst.notes or '',  # Notes
+                roi_for_sorting,  # For sorting (enhanced_score or ROI - not displayed)
+                trend_score_for_sorting  # Trend score 0-100 for sorting
             )
-            rows.append(row)
+            rows.append((row, row_tag))  # Store row with its color tag
 
-        # Enhanced Three-Tier Sorting:
-        # 1. First Priority: All uptrend tickers (regardless of premium, sorted by highest premium)
-        # 2. Second Priority: Non-uptrend tickers with positive premium (sorted by highest premium)
-        # 3. Third Priority: Non-uptrend tickers with negative premium (sorted by highest premium)
+        # ENHANCED: Multi-tier sorting with enhanced quality scores
+        # 1. Primary: Quality tier (excellent > good > marginal > no_data)
+        # 2. Secondary: Trend score 0-100 within each tier (higher score = better)
+        # 3. Tertiary: Enhanced score/ROI value (highest first within same tier+trend)
         
-        # Separate into three groups
-        uptrend_tickers = []
-        non_uptrend_positive = []
-        non_uptrend_negative = []
-        
-        for row in rows:
-            premium_value = row[-2]  # premium_val_num
-            is_uptrend = row[-1] == 1  # uptrend flag
-            has_positive_premium = premium_value != float('inf') and premium_value > 0
+        def sort_key(item):
+            row_data, tag = item
+            score_value = row_data[-2]  # enhanced_score or roi_for_sorting
+            trend_score = row_data[-1]  # trend_score_for_sorting (0-100, higher = better)
             
-            if is_uptrend:
-                uptrend_tickers.append(row)
-            elif has_positive_premium:
-                non_uptrend_positive.append(row)
-            else:
-                non_uptrend_negative.append(row)
+            # Quality tier priority (lower number = higher priority)
+            tier_priority = {
+                'excellent': 0,  # Green (Score ≥80 or ROI ≥0.40%)
+                'good': 1,       # Yellow (Score 60-79 or ROI 0.33-0.40%)
+                'marginal': 2,   # Orange (Score <60 or ROI <0.33%)
+                'no_data': 3     # Gray (no data)
+            }
+            
+            tier = tier_priority.get(tag, 99)
+            
+            # Use numeric trend score (0-100, higher is better)
+            # Negate trend_score so higher scores appear first (lower sort value)
+            trend_rank = -trend_score if trend_score > 0 else 999
+            
+            # Return tuple for sorting: (tier, -trend_score, -enhanced_score) 
+            # Negative values to sort highest scores first within each tier
+            return (tier, trend_rank, -score_value if score_value > 0 else 999)
         
-        print(f"🎯 [WISHLIST] Sorted: {len(uptrend_tickers)} uptrend, {len(non_uptrend_positive)} positive premium, {len(non_uptrend_negative)} negative premium")
+        rows.sort(key=sort_key)
         
-        # Sort each group by premium (MOST NEGATIVE first = BEST profit potential)
-        # More negative = lower cost basis = better deal
-        uptrend_tickers.sort(key=lambda r: r[-2] if r[-2] != float('inf') else 999, reverse=False)  # Most negative first
-        non_uptrend_positive.sort(key=lambda r: r[-2] if r[-2] != float('inf') else 999, reverse=True)  # Highest positive first
-        non_uptrend_negative.sort(key=lambda r: r[-2] if r[-2] != float('inf') else 999, reverse=False)  # Most negative first
+        print(f"🎯 [WISHLIST] Displaying {len(rows)} tickers sorted by Quality Score → Trend → Enhanced Score")
         
-        # Combine: uptrend first, then non-uptrend positive, then non-uptrend negative
-        final_rows = uptrend_tickers + non_uptrend_positive + non_uptrend_negative
-        
-        for row in final_rows:
-            # Remove the sorting helper values before inserting into tree
-            self.tree.insert('', 'end', values=row[:-2])
-        
-        # Force column widths after data insertion to prevent auto-resizing
-        columns = ("Symbol", "Current Price", "52W High", "52W Low", "Premium", "Put Below", "Put Target", "Put Above", "Trend/Entry", "Entry Price", "Exit Price", "Stop Loss", "Notes")
-        col_widths = [90, 110, 110, 110, 124, 140, 160, 140, 120, 110, 110, 110, 180]  # Put Target now 160
-        for col, width in zip(columns, col_widths):
-            # Set minwidth=width to prevent any shrinking below target size
-            self.tree.column(col, width=width, minwidth=width, stretch=False, anchor="center")
-        # Extra enforcement for Put Target column 
-        self.tree.column("Put Target", width=160, minwidth=160, stretch=False, anchor="center")
-        
-        print("🔒 [WISHLIST] Post-data column widths SET - Put Target: 160px (minwidth=160)")
+        # Insert rows with color tags
+        for row_data, tag in rows:
+            display_row = row_data[:-2]  # Remove roi_for_sorting and trend (last 2 elements)
+            self.tree.insert("", "end", values=display_row, tags=(tag,))
         
         # Update status message based on options availability and network issues
         total_tickers = len(watchlist)

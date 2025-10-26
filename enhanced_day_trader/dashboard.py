@@ -30,123 +30,14 @@ from core.paper_trader import paper_trader
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
 
-# Demo trading simulation variables
-demo_trades = []
-demo_start_balance = 10000.0
-demo_current_balance = demo_start_balance
-demo_daily_start = demo_start_balance
-
 # Global status variables
 system_status = {
     'running': True,
-    'last_update': datetime.now().isoformat(),
-    'positions': 0,
-    'balance': demo_current_balance,
-    'win_rate': 0.0,
-    'total_trades': 0,
-    'daily_pnl': 0.0
-}
-
-positions_data = []
-performance_data = {
-    'original_system': {'win_rate': 24.0, 'risk_reward': '1:2'},
-    'enhanced_system': {'win_rate': 0.0, 'risk_reward': '2:1'}
+    'last_update': datetime.now().isoformat()
 }
 
 # Live trade signals
 live_signals = []
-
-def simulate_demo_trade(signal):
-    """Simulate a demo trade execution based on signal"""
-    global demo_current_balance, demo_trades
-    
-    import random
-    import sys
-    import os
-    sys.path.append(os.path.dirname(__file__))
-    from core.risk_manager import EnhancedRiskManager
-    
-    # Use the proper risk manager for position sizing
-    risk_manager = EnhancedRiskManager(demo_current_balance)
-    entry_price = signal['entry_price']
-    stop_loss = signal['stop_loss']
-    target_price = signal['take_profit']  # Fixed: was 'target_price'
-    
-    # Calculate shares using proper risk management
-    position_calc = risk_manager.calculate_position_size(entry_price)
-    shares = position_calc['shares']
-    
-    # Don't trade if position is invalid
-    if shares == 0 or not position_calc['valid']:
-        return  # Skip this trade
-    
-    # Simulate trade outcome based on signal strength
-    signal_strength = signal.get('signal_strength', 0.3)
-    
-    # Higher signal strength = higher win probability
-    win_probability = min(0.45 + (signal_strength * 0.4), 0.85)  # 45-85% win rate
-    
-    is_winner = random.random() < win_probability
-    
-    if is_winner:
-        # Winner: hit target price
-        if signal['direction'] == 'BUY':
-            profit = (target_price - entry_price) * shares
-        else:
-            profit = (entry_price - target_price) * shares
-        outcome = 'WIN'
-    else:
-        # Loser: hit stop loss
-        if signal['direction'] == 'BUY':
-            profit = (stop_loss - entry_price) * shares
-        else:
-            profit = (entry_price - stop_loss) * shares
-        outcome = 'LOSS'
-    
-    # Update demo balance
-    demo_current_balance += profit
-    
-    # Record trade
-    trade_record = {
-        'symbol': signal['symbol'],
-        'direction': signal['direction'],
-        'entry_price': entry_price,
-        'exit_price': target_price if is_winner else stop_loss,
-        'shares': shares,
-        'profit': profit,
-        'outcome': outcome,
-        'timestamp': datetime.now().isoformat(),
-        'signal_strength': signal_strength
-    }
-    
-    demo_trades.append(trade_record)
-    
-    print(f"💰 Demo {outcome}: {signal['symbol']} {signal['direction']} "
-          f"{shares} shares = ${profit:.2f} (Balance: ${demo_current_balance:.2f})")
-    
-    return trade_record
-
-def update_demo_performance():
-    """Update demo performance metrics"""
-    global system_status
-    
-    if demo_trades:
-        wins = len([t for t in demo_trades if t['outcome'] == 'WIN'])
-        total_trades = len(demo_trades)
-        win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
-        
-        system_status['win_rate'] = win_rate
-        system_status['total_trades'] = total_trades
-        system_status['balance'] = demo_current_balance
-        system_status['daily_pnl'] = demo_current_balance - demo_daily_start
-        
-        print(f"📊 Demo Performance: {wins}/{total_trades} wins = {win_rate:.1f}% win rate")
-    else:
-        # No demo trades yet, show target performance during market hours
-        system_status['balance'] = demo_current_balance
-        system_status['daily_pnl'] = 0.0
-        system_status['win_rate'] = 0.0  # Start at 0% when no trades
-        system_status['total_trades'] = 0
 
 @app.route('/')
 def dashboard():
@@ -273,8 +164,6 @@ def get_trades():
 def update_system_status():
     """Background thread to update system status and scan for signals"""
     import asyncio
-    import random
-    last_signals = []
     
     while True:
         try:
@@ -289,27 +178,6 @@ def update_system_status():
                 
                 global live_signals
                 live_signals = signals
-                
-                system_status['positions'] = len(live_signals)
-                
-                # Simulate demo trades for new signals
-                current_symbols = [s['symbol'] for s in signals]
-                last_symbols = [s['symbol'] for s in last_signals]
-                
-                # Find new signals that weren't in the last update
-                new_signals = [s for s in signals if s['symbol'] not in last_symbols]
-                
-                # Randomly execute some new signals (simulate selective trading)
-                for signal in new_signals:
-                    # Only trade signals with decent strength and random selection
-                    if (signal.get('signal_strength', 0) > 0.2 and 
-                        random.random() < 0.3):  # 30% of signals get "executed"
-                        simulate_demo_trade(signal)
-                
-                last_signals = signals.copy()
-                
-                # Update demo performance
-                update_demo_performance()
                 
                 if live_signals:
                     print(f"📡 Dashboard updated with {len(signals)} signals")
@@ -585,7 +453,7 @@ def create_html_template():
             <div class="status-card">
                 <h3>Account Balance</h3>
                 <div id="account-balance" class="status-value">$10,000.00</div>
-                <div class="status-label">Demo Account</div>
+                <div class="status-label">Paper Trading</div>
             </div>
             
             <div class="status-card">
@@ -597,13 +465,13 @@ def create_html_template():
             <div class="status-card">
                 <h3>Total Trades</h3>
                 <div id="total-trades" class="status-value">0</div>
-                <div class="status-label">Demo Executions</div>
+                <div class="status-label">All Executions</div>
             </div>
             
             <div class="status-card">
                 <h3>Win Rate</h3>
-                <div id="win-rate" class="status-value">65%</div>
-                <div class="status-label">Success Ratio</div>
+                <div id="win-rate" class="status-value">N/A</div>
+                <div class="status-label">Return %</div>
             </div>
         </div>
         
@@ -635,12 +503,12 @@ def create_html_template():
             </div>
         </div>
         
-        <!-- Recent Demo Trades Section -->
+        <!-- Recent Trades Section -->
         <div class="signals-section">
-            <h2 style="text-align: center; margin-bottom: 20px;">Recent Demo Trades</h2>
+            <h2 style="text-align: center; margin-bottom: 20px;">Recent Trades</h2>
             <div id="trades-container">
                 <div class="no-signals">
-                    <p style="text-align: center; opacity: 0.7;">No demo trades executed yet...</p>
+                    <p style="text-align: center; opacity: 0.7;">No trades executed yet...</p>
                 </div>
             </div>
         </div>
@@ -675,7 +543,27 @@ def create_html_template():
                     document.getElementById('account-balance').textContent = '$' + data.balance.toFixed(2);
                     document.getElementById('daily-pnl').textContent = '$' + data.daily_pnl.toFixed(2);
                     document.getElementById('total-trades').textContent = data.total_trades;
-                    document.getElementById('win-rate').textContent = data.win_rate.toFixed(1) + '%';
+                    
+                    // Win rate - shows actual return percentage (can be negative)
+                    // Positive = making money (green), Negative = losing money (red), N/A = no trades
+                    const winRateElement = document.getElementById('win-rate');
+                    if (data.win_rate === null) {
+                        winRateElement.textContent = 'N/A';
+                        winRateElement.style.color = '#888888';
+                    } else {
+                        // Show with + or - sign
+                        const sign = data.win_rate > 0 ? '+' : '';
+                        winRateElement.textContent = sign + data.win_rate.toFixed(2) + '%';
+                        // Color code: green if positive, red if negative, gray if zero
+                        if (data.win_rate > 0) {
+                            winRateElement.style.color = '#22c55e'; // Green
+                        } else if (data.win_rate < 0) {
+                            winRateElement.style.color = '#ef4444'; // Red
+                        } else {
+                            winRateElement.style.color = '#888888'; // Gray
+                        }
+                    }
+                    
                     document.getElementById('last-update').textContent = new Date(data.last_update).toLocaleString();
                     
                     // Color-code the P&L
@@ -698,45 +586,62 @@ def create_html_template():
                     const container = document.getElementById('trades-container');
                     
                     if (trades.length === 0) {
-                        container.innerHTML = '<div class="no-signals"><p style="text-align: center; opacity: 0.7;">No demo trades executed yet...</p></div>';
+                        container.innerHTML = '<div class="no-signals"><p style="text-align: center; opacity: 0.7;">No trades executed yet...</p></div>';
                         return;
                     }
                     
                     let tradesHtml = '';
                     trades.forEach(trade => {
-                        const outcomeColor = trade.outcome === 'WIN' ? '#22c55e' : '#ef4444';
-                        const profitSign = trade.profit >= 0 ? '+' : '';
+                        // Determine trade outcome and color
+                        let outcomeColor, outcomeText;
+                        if (trade.status === 'OPEN') {
+                            outcomeColor = '#4488ff';
+                            outcomeText = '🟢 ACTIVE';
+                        } else if (trade.pnl > 0) {
+                            outcomeColor = '#22c55e';
+                            outcomeText = '💰 WIN';
+                        } else if (trade.pnl < 0) {
+                            outcomeColor = '#ef4444';
+                            outcomeText = '📉 LOSS';
+                        } else {
+                            outcomeColor = '#888888';
+                            outcomeText = '➖ BREAK-EVEN';
+                        }
+                        
+                        const profitSign = trade.pnl >= 0 ? '+' : '';
+                        const exitPrice = trade.close_price || 'Active';
+                        const openTime = new Date(trade.open_time).toLocaleString();
                         
                         tradesHtml += `
                             <div class="signal-card" style="border-left: 4px solid ${outcomeColor};">
                                 <div class="signal-header">
-                                    <div class="signal-symbol">${trade.symbol}</div>
-                                    <div class="signal-direction" style="background: ${outcomeColor};">${trade.outcome}</div>
+                                    <div class="signal-symbol">${trade.ticker}</div>
+                                    <div class="signal-direction" style="background: ${outcomeColor};">${outcomeText}</div>
                                 </div>
                                 <div class="signal-details">
                                     <div class="signal-detail">
                                         <div class="signal-detail-label">${trade.direction}</div>
-                                        <div class="signal-detail-value">${trade.shares} shares</div>
+                                        <div class="signal-detail-value">${trade.quantity} shares</div>
                                     </div>
                                     <div class="signal-detail">
                                         <div class="signal-detail-label">Entry</div>
-                                        <div class="signal-detail-value">$${trade.entry_price}</div>
+                                        <div class="signal-detail-value">$${trade.open_price.toFixed(2)}</div>
                                     </div>
                                     <div class="signal-detail">
                                         <div class="signal-detail-label">Exit</div>
-                                        <div class="signal-detail-value">$${trade.exit_price}</div>
+                                        <div class="signal-detail-value">${typeof exitPrice === 'number' ? '$' + exitPrice.toFixed(2) : exitPrice}</div>
                                     </div>
                                     <div class="signal-detail">
-                                        <div class="signal-detail-label">Profit/Loss</div>
-                                        <div class="signal-detail-value" style="color: ${outcomeColor};">${profitSign}$${trade.profit.toFixed(2)}</div>
+                                        <div class="signal-detail-label">P&L</div>
+                                        <div class="signal-detail-value" style="color: ${outcomeColor};">${profitSign}$${Math.abs(trade.pnl).toFixed(2)}</div>
+                                    </div>
+                                    <div class="signal-detail">
+                                        <div class="signal-detail-label">P&L %</div>
+                                        <div class="signal-detail-value" style="color: ${outcomeColor};">${profitSign}${trade.pnl_percent.toFixed(2)}%</div>
                                     </div>
                                     <div class="signal-detail">
                                         <div class="signal-detail-label">Time</div>
-                                        <div class="signal-detail-value">${new Date(trade.timestamp).toLocaleTimeString()}</div>
-                                    </div>
-                                    <div class="signal-detail">
-                                        <div class="signal-detail-label">Signal Strength</div>
-                                        <div class="signal-detail-value">${(trade.signal_strength * 100).toFixed(0)}%</div>
+                                        <div class="signal-detail-value">${openTime}</div>
                                     </div>
                                 </div>
                             </div>

@@ -270,11 +270,16 @@ class PaperTradingEngine:
                 # Get current market price
                 quote = schwab_data.get_quote(trade.ticker)
                 if not quote:
+                    logger.warning(f"⚠️ No quote returned for {trade.ticker} - skipping stop/take check (API may be down)")
                     continue
                 
                 current_price = quote.get('lastPrice', 0)
                 if current_price <= 0:
+                    logger.warning(f"⚠️ Invalid price ({current_price}) for {trade.ticker} - skipping stop/take check")
                     continue
+                
+                # Log current price vs trigger levels for debugging
+                logger.debug(f"📊 {trade.ticker} [{trade.direction}]: Current=${current_price:.2f}, Stop=${trade.stop_loss:.2f}, Take=${trade.take_profit:.2f}")
                 
                 # Check stop loss
                 if trade.direction == 'LONG' and current_price <= trade.stop_loss:
@@ -308,8 +313,17 @@ class PaperTradingEngine:
         total_trades = len(self.closed_trades)
         winning_trades = len([t for t in self.closed_trades if t.pnl > 0])
         losing_trades = len([t for t in self.closed_trades if t.pnl < 0])
+        breakeven_trades = len([t for t in self.closed_trades if t.pnl == 0])
         
-        win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+        # Calculate win rate as actual P&L percentage of initial balance
+        # This shows real performance: negative if losing, positive if winning
+        # Returns None if no trades yet, so display can show "N/A"
+        if total_trades > 0:
+            # Win rate = (Total P&L / Initial Balance) * 100
+            # This gives the actual percentage return/loss
+            win_rate = (self.total_pnl / self.initial_balance) * 100
+        else:
+            win_rate = None  # Use None instead of 0 to indicate no data
         
         avg_win = np.mean([t.pnl for t in self.closed_trades if t.pnl > 0]) if winning_trades > 0 else 0
         avg_loss = np.mean([t.pnl for t in self.closed_trades if t.pnl < 0]) if losing_trades > 0 else 0
@@ -332,7 +346,8 @@ class PaperTradingEngine:
             'total_trades': total_trades,
             'winning_trades': winning_trades,
             'losing_trades': losing_trades,
-            'win_rate': win_rate,
+            'breakeven_trades': breakeven_trades,
+            'win_rate': win_rate,  # Can be None if no trades
             'avg_win': avg_win,
             'avg_loss': avg_loss,
             'profit_factor': profit_factor,
@@ -377,6 +392,10 @@ class PaperTradingEngine:
                 self.total_commission = data.get('total_commission', 0.0)
                 self.trade_counter = data.get('trade_counter', 0)
                 self.daily_pnl = data.get('daily_pnl', {})
+                
+                # Clear existing trades before loading to prevent duplicates
+                self.active_trades.clear()
+                self.closed_trades.clear()
                 
                 # Load active trades
                 for trade_data in data.get('active_trades', []):

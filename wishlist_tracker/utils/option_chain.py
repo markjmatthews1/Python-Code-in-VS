@@ -8,6 +8,94 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from etrade_auth import get_etrade_session
+from wishlist_tracker.utils.market_hours import is_market_open, should_use_planning_mode
+from wishlist_tracker.utils.option_cache import save_option_cache, load_option_cache
+from wishlist_tracker.utils.enhanced_put_strategy import score_put_strategy, generate_multiple_contract_strategies
+# PHASE 3: Removed old trend_analysis imports (get_trend_signal, is_uptrend) - no longer used
+
+
+def calculate_liquidity_score(spread_pct, open_interest, daily_volume, bid_size):
+    """
+    Calculate composite liquidity score (0-100)
+    
+    Higher score = better liquidity = easier fills
+    
+    Components:
+    - Spread (40 pts): Tighter spread = better execution
+    - Open Interest (30 pts): More existing positions = more liquid
+    - Daily Volume (20 pts): More active trading = easier fills
+    - Bid Size (10 pts): Larger bid = deeper market
+    
+    Args:
+        spread_pct: Bid-ask spread as percentage
+        open_interest: Total open contracts for this strike
+        daily_volume: Contracts traded today
+        bid_size: Number of contracts at bid price
+    
+    Returns:
+        int: Liquidity score (0-100)
+    """
+    score = 0
+    
+    # Spread component (40 points max) - Most important for execution
+    if spread_pct < 10:
+        score += 40  # Excellent spread
+    elif spread_pct < 20:
+        score += 25  # Good spread
+    elif spread_pct < 30:
+        score += 10  # Acceptable spread
+    # else: 0 points for wide spread
+    
+    # Open Interest component (30 points max) - Indicates market liquidity
+    if open_interest > 1000:
+        score += 30  # Highly liquid
+    elif open_interest > 500:
+        score += 20  # Good liquidity
+    elif open_interest > 100:
+        score += 10  # Acceptable
+    # else: 0 points for thin market
+    
+    # Daily Volume component (20 points max) - Shows today's activity
+    if daily_volume > 500:
+        score += 20  # Very active
+    elif daily_volume > 200:
+        score += 15  # Active
+    elif daily_volume > 50:
+        score += 5   # Some activity
+    # else: 0 points for inactive
+    
+    # Bid Size component (10 points max) - Immediate fillability
+    if bid_size >= 100:
+        score += 10  # Deep market
+    elif bid_size >= 50:
+        score += 5   # Decent depth
+    # else: 0 points for thin bid
+    
+    return score
+
+
+def format_liquidity_display(score):
+    """
+    Format liquidity score with text indicator for display.
+    
+    Note: Scores below 40 are filtered out during option selection,
+    so this function only handles the three viable liquidity tiers.
+    
+    Args:
+        score: Liquidity score (0-100)
+        
+    Returns:
+        Text indicator (HIGH/GOOD/FAIR)
+    """
+    if score >= 80:
+        return "HIGH"  # Excellent - tight spreads, high volume/OI
+    elif score >= 60:
+        return "GOOD"  # Good - acceptable for most trades
+    elif score >= 40:
+        return "FAIR"  # Fair - watch for slippage, use limit orders
+    else:
+        # Should never reach here since we filter out <40
+        return "POOR"  # Poor (filtered out)
 
 
 def get_target_expiration_dates():
@@ -95,19 +183,53 @@ def calculate_probability_above_strike(current_price, strike_price, days_to_expi
 
 
 def fetch_put_option_chain(ticker, current_price):
-    """Fetch put options for 2 months, find best negative premium with probability analysis"""
+    """Fetch put options for 2 months, find best negative premium with probability analysis
+    
+    Market-aware filtering:
+    - During market hours: Stricter filters (requires valid bid/ask with reasonable spreads)
+    - During closed hours (pre-market/after-hours/weekend): Planning mode
+      * Shows options even without perfect negative premiums
+      * Accepts any bid > 0 (ignores size since it's often 0 after hours)
+      * Wider strike range for better planning
+    """
+    print(f"\n{'='*60}")
+    print(f"🎯 fetch_put_option_chain({ticker}, current_price=${current_price})")
+    print(f"{'='*60}")
+    
+    if not current_price or current_price <= 0:
+        print(f"❌ {ticker} - Invalid current_price: {current_price}")
+        return []
+    
     session_result = get_etrade_session()
     if not session_result:
-        print(f"Failed to get E*Trade session for {ticker}")
+        print(f"❌ {ticker} - Failed to get E*Trade session")
         return []
     
     session, base_url = session_result
     
-    # Get target expiration dates (2 months)
+    # Check market status for filtering mode
+    is_open, market_msg, market_state = is_market_open()
+    planning_mode = should_use_planning_mode()
+    
+    # During closed hours, try to load cached data from previous session
+    if planning_mode:
+        cached_options, cache_age = load_option_cache(ticker)
+        if cached_options and len(cached_options) > 0:
+            print(f"💾 {ticker} - Using cached data from {cache_age:.1f} hours ago ({len(cached_options)} options)")
+            # Return cached results directly (already scored and sorted)
+            return cached_options
+        else:
+            print(f"🌙 {ticker} - No cache available, attempting live fetch (may return empty)")
+    
+    # Log market mode
+    mode_str = "PLANNING MODE" if planning_mode else "LIVE MODE"
+    print(f"📊 {mode_str}: {ticker} - Market {market_state}, using ROI-based filtering")
+    
+    # Get target expiration dates (implements 5 trading days rule)
     target_expiries = get_target_expiration_dates()
     print(f"DEBUG: {ticker} - Checking {len(target_expiries)} expiration dates")
     
-    all_candidates = []
+    all_candidates = []  # All options passing ROI filter
     
     for target_expiry in target_expiries:
         # Build option chain URL with specific expiration
@@ -119,43 +241,140 @@ def fetch_put_option_chain(ticker, current_price):
             'expiryMonth': target_expiry.month,
             'expiryYear': target_expiry.year
         }
-        
         try:
             print(f"DEBUG: {ticker} - Fetching options for {target_expiry}")
             response = session.get(option_url, params=params)
             
             if response.status_code == 200:
                 options = parse_xml_option_pairs(response.text)
-                print(f"DEBUG: {ticker} - Found {len(options)} put options for {target_expiry}")
+                print(f"DEBUG: {ticker} - Parsed {len(options)} put options with bid>0 for {target_expiry}")
                 
-                # Filter options within ±$10 of current price and calculate negative premiums
+                # Filter options using ROI-based logic (Phase 1)
                 days_to_expiry = (target_expiry - date.today()).days
+                
+                # Calculate minimum required ROI (0.33% per day)
+                min_daily_roi = 0.33
+                min_total_roi = min_daily_roi * days_to_expiry
+                
+                print(f"  📊 Days to expiry: {days_to_expiry}, Min ROI required: {min_total_roi:.1f}%")
+                
+                filtered_by_spread = 0
+                filtered_by_roi = 0
+                filtered_by_premium = 0
+                filtered_by_liquidity = 0  # PHASE 2: Track liquidity rejections
+                added_count = 0
                 
                 for opt in options:
                     strike = opt['strike']
                     bid = opt['bid']
+                    ask = opt.get('ask', bid * 1.1)  # Default ask if missing
                     
-                    # Check if within ±$10 range
-                    if abs(strike - current_price) <= 10.0 and bid > 0:
-                        net_cost_basis = strike - bid
-                        negative_premium = current_price - net_cost_basis
-                        
-                        # Only include if it's a true negative premium (profitable if assigned)
-                        if negative_premium > 0:
-                            probability = calculate_probability_above_strike(current_price, strike, days_to_expiry)
-                            
-                            candidate = {
-                                'strike': strike,
-                                'premium': bid,
-                                'expiration': target_expiry.strftime('%m/%d'),
-                                'net_cost_basis': net_cost_basis,
-                                'negative_premium_amount': negative_premium,
-                                'net_diff': negative_premium,  # GUI expects this field name
-                                'probability_above_strike': probability,
-                                'days_to_expiry': days_to_expiry,
-                                'expiry_date': target_expiry
-                            }
-                            all_candidates.append(candidate)
+                    # Hard Filter 1: Minimum absolute premium ($2.00/share = $200/contract)
+                    if bid < 2.00:
+                        filtered_by_premium += 1
+                        continue
+                    
+                    # Hard Filter 2: Bid-ask spread quality
+                    # During market hours: Reject if >30% (likely stale/bad data)
+                    # During closed hours: Reject if >50% (more lenient for planning)
+                    max_spread = 30 if is_open else 50
+                    
+                    if bid > 0 and ask > 0:
+                        spread_pct = ((ask - bid) / bid) * 100
+                        if spread_pct > max_spread:
+                            filtered_by_spread += 1
+                            continue
+                    
+                    # NEW: ROI-based filtering (NO strike distance limits!)
+                    # Calculate daily ROI
+                    total_roi = (bid / strike) * 100
+                    daily_roi = total_roi / days_to_expiry
+                    
+                    # Hard Filter 3: Minimum ROI threshold
+                    if daily_roi < min_daily_roi:
+                        filtered_by_roi += 1
+                        continue
+                    
+                    # Passed all filters - calculate additional metrics
+                    net_cost_basis = strike - bid
+                    negative_premium = current_price - net_cost_basis
+                    
+                    # Calculate quality flags
+                    is_negative_premium = negative_premium > 0
+                    premium_ratio = (bid / strike) * 100
+                    is_reasonable = premium_ratio <= 40
+                    
+                    probability = calculate_probability_above_strike(current_price, strike, days_to_expiry)
+                    
+                    # PHASE 2: Calculate liquidity score
+                    liquidity_score = calculate_liquidity_score(
+                        spread_pct=spread_pct,
+                        open_interest=opt.get('open_interest', 0),
+                        daily_volume=opt.get('daily_volume', 0),
+                        bid_size=opt.get('bid_size', 0)
+                    )
+                    
+                    # Hard Filter 4: Minimum liquidity threshold (reject poor liquidity)
+                    # If liquidity score < 40, option is not a viable trade candidate
+                    if liquidity_score < 40:
+                        filtered_by_liquidity += 1
+                        continue
+                    
+                    liquidity_display = format_liquidity_display(liquidity_score)
+                    
+                    # ENHANCED: Use new scoring system for quality assessment
+                    # Default to NEUTRAL trend (can be enhanced later with analyst ratings)
+                    enhanced_score_data = score_put_strategy(
+                        current_price=current_price,
+                        strike=strike,
+                        premium=bid,
+                        days_to_expiry=days_to_expiry,
+                        trend_direction="NEUTRAL",  # TODO: Integrate analyst ratings
+                        liquidity_score=liquidity_score
+                    )
+                    
+                    candidate = {
+                        'strike': strike,
+                        'premium': bid,
+                        'expiration': target_expiry.strftime('%m/%d'),
+                        'net_cost_basis': enhanced_score_data['cost_basis'],
+                        'negative_premium_amount': enhanced_score_data['cushion_dollars'],
+                        'net_diff': enhanced_score_data['cushion_dollars'],  # GUI expects this field name
+                        'probability_above_strike': probability,
+                        'days_to_expiry': days_to_expiry,
+                        'expiry_date': target_expiry,
+                        'is_negative_premium': enhanced_score_data['cushion_dollars'] > 0,
+                        'premium_ratio': premium_ratio,
+                        'is_reasonable': is_reasonable,
+                        'spread_pct': spread_pct if bid > 0 else 0,
+                        'is_planning_mode': planning_mode,
+                        # NEW ROI metrics
+                        'daily_roi': daily_roi,
+                        'total_roi': total_roi,
+                        'premium_dollars': bid * 100,  # Per contract
+                        # PHASE 2: Liquidity metrics
+                        'liquidity_score': liquidity_score,
+                        'liquidity_display': liquidity_display,
+                        'open_interest': opt.get('open_interest', 0),
+                        'daily_volume': opt.get('daily_volume', 0),
+                        'bid_size': opt.get('bid_size', 0),
+                        'ask_size': opt.get('ask_size', 0),
+                        # ENHANCED: New scoring metrics
+                        'enhanced_score': enhanced_score_data['final_score'],
+                        'cost_basis_score': enhanced_score_data['cost_basis_score'],
+                        'premium_score': enhanced_score_data['premium_score'],
+                        'time_score': enhanced_score_data['time_score'],
+                        'cushion_score': enhanced_score_data['cushion_score'],
+                        'cushion_percent': enhanced_score_data['cushion_percent'],
+                        'premium_per_day': enhanced_score_data['premium_per_day'],
+                        'premium_yield': enhanced_score_data['premium_yield'],
+                        'strike_vs_current': enhanced_score_data['strike_vs_current'],
+                    }
+                    
+                    all_candidates.append(candidate)
+                    added_count += 1
+                
+                print(f"  🔍 Filter results: spread={filtered_by_spread}, roi={filtered_by_roi}, premium={filtered_by_premium}, liquidity={filtered_by_liquidity}, added={added_count}")
                             
             else:
                 print(f"ERROR: {ticker} - API request failed for {target_expiry}: {response.status_code}")
@@ -164,38 +383,28 @@ def fetch_put_option_chain(ticker, current_price):
             print(f"ERROR: {ticker} - Exception fetching {target_expiry}: {e}")
     
     if not all_candidates:
-        print(f"INFO: {ticker} - No negative premium opportunities found")
+        print(f"❌ {ticker} - NO OPTIONS FOUND after filtering")
+        print(f"   (All options failed: premium<$2.00, ROI<{min_daily_roi:.2f}%/day, spread>{ max_spread}%, or liquidity<40)")
         return []
     
-    # Calculate combined score: premium income + negative premium protection
-    for candidate in all_candidates:
-        premium_income = candidate['premium']
-        negative_premium = candidate['negative_premium_amount']
-        probability = candidate['probability_above_strike']
-        
-        # Expected value calculation:
-        # (Premium if not assigned * probability) + (Negative premium value if assigned * (1-probability))
-        expected_value = (premium_income * probability) + (negative_premium * (1 - probability))
-        
-        # Also consider pure premium income potential
-        premium_yield = (premium_income / candidate['strike']) * 100  # Annualized percentage
-        
-        # Combined score favors high premium with decent protection
-        combined_score = (premium_income * 0.6) + (negative_premium * 0.4)
-        
-        candidate['expected_value'] = expected_value
-        candidate['premium_yield'] = premium_yield
-        candidate['combined_score'] = combined_score
+    print(f"✅ {ticker} - Found {len(all_candidates)} candidates passing ROI filter")
     
-    # Sort by combined score (favoring premium income but with negative premium protection)
-    all_candidates.sort(key=lambda x: x['combined_score'], reverse=True)
+    # ENHANCED SCORING: Prioritize overall quality (cost basis + premium + time efficiency)
+    # Sort by enhanced_score (highest first) - balances all factors
+    all_candidates.sort(key=lambda x: x['enhanced_score'], reverse=True)
     
-    # Return top 3 candidates
+    # Return top 3 candidates by enhanced score
     best_candidates = all_candidates[:3]
     
-    print(f"SUCCESS: {ticker} - Found {len(all_candidates)} negative premium options, returning top {len(best_candidates)}")
-    for i, candidate in enumerate(best_candidates):
-        print(f"  {i+1}: ${candidate['strike']} put @ ${candidate['premium']:.2f} -> Premium: ${candidate['premium']:.2f} | If assigned: ${candidate['net_cost_basis']:.2f} (${candidate['negative_premium_amount']:.2f} negative) | Score: {candidate['combined_score']:.2f}")
+    print(f"🎯 SUCCESS: {ticker} - Returning top {len(best_candidates)} by enhanced score:")
+    for i, candidate in enumerate(best_candidates, 1):
+        print(f"  {i}. ${candidate['strike']:.0f} @ ${candidate['premium']:.2f} ({candidate['expiration']}) → "
+              f"Score: {candidate['enhanced_score']:.1f}/100 | Cost Basis: ${candidate['net_cost_basis']:.2f} | "
+              f"Cushion: {candidate['cushion_percent']:.1f}% | Premium/Day: ${candidate['premium_per_day']:.2f}")
+    
+    # Cache the results if market is open (for use during next closed session)
+    if is_open and best_candidates:
+        save_option_cache(ticker, best_candidates)
     
     return best_candidates
 
@@ -227,6 +436,9 @@ def calculate_trading_days(start_date, end_date):
 def parse_xml_option_pairs(xml_response):
     """Parse the XML response to extract option data"""
     options = []
+    total_found = 0
+    zero_bid_count = 0
+    
     try:
         root = ET.fromstring(xml_response)
         
@@ -234,10 +446,17 @@ def parse_xml_option_pairs(xml_response):
         for option_pair in root.findall('.//OptionPair'):
             put_element = option_pair.find('Put')
             if put_element is not None:
+                total_found += 1
                 symbol = put_element.find('displaySymbol')
                 bid = put_element.find('bid')
                 ask = put_element.find('ask')
                 strike = put_element.find('strikePrice')
+                
+                # PHASE 2: Extract liquidity metrics
+                open_interest = put_element.find('openInterest')
+                volume = put_element.find('volume')
+                bid_size = put_element.find('bidSize')
+                ask_size = put_element.find('askSize')
                 
                 if all(elem is not None for elem in [symbol, bid, ask, strike]):
                     symbol_text = symbol.text
@@ -245,18 +464,37 @@ def parse_xml_option_pairs(xml_response):
                     ask_value = float(ask.text) if ask.text and ask.text != '0' else 0.0
                     strike_value = float(strike.text)
                     
+                    # PHASE 2: Parse liquidity data with safe defaults
+                    open_interest_value = int(open_interest.text) if open_interest is not None and open_interest.text else 0
+                    volume_value = int(volume.text) if volume is not None and volume.text else 0
+                    bid_size_value = int(bid_size.text) if bid_size is not None and bid_size.text else 0
+                    ask_size_value = int(ask_size.text) if ask_size is not None and ask_size.text else 0
+                    
+                    # DEBUG: Log what we're seeing
+                    if total_found <= 5:  # Log first 5 for debugging
+                        print(f"  📊 Parse: Strike=${strike_value:.2f}, Bid=${bid_value:.2f}, Ask=${ask_value:.2f}, OI={open_interest_value}, Vol={volume_value}")
+                    
                     # Only include options with valid bids
                     if bid_value > 0:
                         options.append({
                             'symbol': symbol_text,
                             'strike': strike_value,
                             'bid': bid_value,
-                            'ask': ask_value
+                            'ask': ask_value,
+                            # PHASE 2: Add liquidity metrics
+                            'open_interest': open_interest_value,
+                            'daily_volume': volume_value,
+                            'bid_size': bid_size_value,
+                            'ask_size': ask_size_value
                         })
+                    else:
+                        zero_bid_count += 1
+        
+        print(f"  ✅ Parsed: {total_found} total, {len(options)} with bid>0, {zero_bid_count} with bid=0")
                         
     except ET.ParseError as e:
-        print(f"Error parsing XML response: {e}")
+        print(f"❌ Error parsing XML response: {e}")
     except Exception as e:
-        print(f"Error extracting option data: {e}")
+        print(f"❌ Error extracting option data: {e}")
     
     return options
