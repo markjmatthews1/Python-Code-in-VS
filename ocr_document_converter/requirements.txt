@@ -1,0 +1,25 @@
+# OCR Document Converter - Requirements
+# Install with: pip install -r requirements.txt
+
+# Core functionality
+pytesseract>=0.3.10          # OCR engine interface
+pdf2image>=1.16.3            # PDF to image conversion
+python-docx>=1.1.0           # Word document creation
+Pillow>=10.0.0               # Image processing
+
+# Color and layout detection
+opencv-python>=4.8.0         # Advanced image processing
+numpy>=1.24.0                # Numerical operations for color analysis
+scikit-learn>=1.3.0          # K-means clustering for color detection
+
+# PDF handling
+PyPDF2>=3.0.0                # PDF manipulation
+
+# UI
+customtkinter>=5.2.0         # Modern GUI framework
+
+# Optional but recommended
+pywin32>=306                 # Windows integration (if on Windows)
+
+# For standalone executable creation (development only)
+# pyinstaller>=6.0.0

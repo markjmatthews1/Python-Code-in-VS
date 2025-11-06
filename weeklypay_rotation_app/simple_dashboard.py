@@ -19,6 +19,23 @@ import random
 import math
 import sys
 import os
+import pytz
+
+# Import rotation engine for timing and NAV-based rotation logic
+try:
+    from rotation_engine import RotationEngine
+    ROTATION_ENGINE_AVAILABLE = True
+except ImportError:
+    ROTATION_ENGINE_AVAILABLE = False
+    print("WARNING: rotation_engine.py not found - rotation features disabled")
+
+# Import exit window monitor for exit timing alerts
+try:
+    from exit_window_monitor import ExitWindowMonitor
+    EXIT_MONITOR_AVAILABLE = True
+except ImportError:
+    EXIT_MONITOR_AVAILABLE = False
+    print("WARNING: exit_window_monitor.py not found - exit monitoring disabled")
 
 # Suppress print statements to prevent Streamlit from showing them as info messages
 class NullWriter:
@@ -605,10 +622,25 @@ def format_rotation_week_summary(df):
         reason = f"Low RSI {rsi:.1f}, Yield {yield_pct:.1f}%"
         summary.append(f"[-] {priority_icon} ROTATE OUT OF: {ticker} ({reason})")
     
-    # HOLD signals
+    # HOLD signals - show owned positions with reasons
     if not hold_signals.empty:
-        hold_count = len(hold_signals)
-        summary.append(f"[=] HOLD: {hold_count} ETFs maintaining positions")
+        # Separate strong holds (owned with specific reasons) from neutral holds
+        strong_holds = hold_signals[hold_signals['Signal_Strength'] >= 0.7]
+        neutral_holds = hold_signals[hold_signals['Signal_Strength'] < 0.7]
+        
+        # Show strong HOLD signals first (owned positions with important reasons)
+        if not strong_holds.empty:
+            for _, row in strong_holds.iterrows():
+                ticker = row['Ticker']
+                reason = row.get('Signal_Reason', 'Maintaining position')
+                summary.append(f"[=] HOLD: {ticker} - {reason}")
+        
+        # Show neutral HOLD signals (non-owned or no strong action needed)
+        if not neutral_holds.empty:
+            # List all neutral hold tickers
+            neutral_tickers = neutral_holds['Ticker'].tolist()
+            tickers_str = ", ".join(neutral_tickers)
+            summary.append(f"[=] HOLD: {tickers_str} - No strong action signals")
     
     return "\n".join(summary)
 
@@ -756,6 +788,260 @@ def create_tkinter_gui_window():
                 create_trophy_box(trophy_frame, i, row['Ticker'], 
                                  row['WeeklyPay_Score'], row['Weekly_Yield_%'])
             
+            # Update Rotation Engine Alert Panel
+            if ROTATION_ENGINE_AVAILABLE:
+                try:
+                    # Clear existing rotation alert
+                    for widget in rotation_alert_container.winfo_children():
+                        widget.destroy()
+                    
+                    # Get current holdings
+                    holdings = get_current_holdings_for_rotation()
+                    
+                    # Get rotation engine data
+                    engine = RotationEngine()
+                    current_time = engine.get_current_time_et()
+                    is_market_open = engine.is_market_open()
+                    
+                    if holdings:
+                        categorized = engine.analyze_holdings(holdings)
+                        alert = engine.get_rotation_alert(holdings)
+                    else:
+                        alert = {
+                            'urgency': 'info',
+                            'message': '💼 No current holdings. Ready to start rotation.',
+                            'actions': []
+                        }
+                        categorized = {'ready_to_sell': [], 'must_hold': [], 'hold_for_nav': []}
+                    
+                    next_targets = engine.find_next_rotation_targets()
+                    
+                    # Determine alert color
+                    if alert['urgency'] == 'critical':
+                        bg_color = '#ff4757'
+                        fg_color = 'white'
+                    elif alert['urgency'] == 'important':
+                        bg_color = '#ffa502'
+                        fg_color = 'white'
+                    else:
+                        bg_color = '#1e90ff'
+                        fg_color = 'white'
+                    
+                    # Create alert frame
+                    alert_frame = tk.Frame(rotation_alert_container, bg=bg_color, relief='raised', bd=3)
+                    alert_frame.pack(fill=tk.X, pady=10)
+                    
+                    # Title
+                    alert_title = tk.Label(
+                        alert_frame,
+                        text="🚨 ROTATION TIMING ALERT",
+                        font=("Arial", 16, "bold"),
+                        bg=bg_color,
+                        fg=fg_color
+                    )
+                    alert_title.pack(pady=5)
+                    
+                    # Time and market status
+                    time_text = f"{current_time.strftime('%A, %B %d, %Y at %I:%M %p ET')}\n"
+                    time_text += f"{'🟢 Market OPEN' if is_market_open else '🔴 Market CLOSED'}"
+                    time_label = tk.Label(
+                        alert_frame,
+                        text=time_text,
+                        font=("Arial", 11),
+                        bg=bg_color,
+                        fg=fg_color
+                    )
+                    time_label.pack(pady=3)
+                    
+                    # Alert message
+                    message_label = tk.Label(
+                        alert_frame,
+                        text=alert['message'],
+                        font=("Arial", 13, "bold"),
+                        bg=bg_color,
+                        fg=fg_color,
+                        wraplength=1200
+                    )
+                    message_label.pack(pady=10)
+                    
+                    # Actions section
+                    if alert['actions']:
+                        actions_frame = tk.Frame(alert_frame, bg=bg_color)
+                        actions_frame.pack(fill=tk.X, padx=20, pady=5)
+                        
+                        tk.Label(
+                            actions_frame,
+                            text="🎯 RECOMMENDED ACTIONS:",
+                            font=("Arial", 12, "bold"),
+                            bg=bg_color,
+                            fg=fg_color
+                        ).pack(anchor='w', pady=5)
+                        
+                        for action in alert['actions']:
+                            if action['type'] == 'sell':
+                                action_text = f"📤 SELL {action['ticker']} - NAV: {action['nav_pct']:+.2f}% - {action['reason']}"
+                                action_bg = '#27ae60'
+                            elif action['type'] == 'buy':
+                                action_text = f"📥 BUY {action['ticker']} - Deadline: {action['deadline']} - Ex-Div: {action['ex_div_date']}"
+                                action_bg = '#e67e22'
+                            else:
+                                continue
+                            
+                            action_label = tk.Label(
+                                actions_frame,
+                                text=action_text,
+                                font=("Arial", 10, "bold"),
+                                bg=action_bg,
+                                fg='white',
+                                relief='raised',
+                                bd=2,
+                                padx=10,
+                                pady=5
+                            )
+                            action_label.pack(anchor='w', pady=2)
+                    
+                    # Holdings status
+                    if holdings:
+                        holdings_frame = tk.Frame(alert_frame, bg=bg_color)
+                        holdings_frame.pack(fill=tk.X, padx=20, pady=10)
+                        
+                        tk.Label(
+                            holdings_frame,
+                            text="💼 CURRENT HOLDINGS STATUS:",
+                            font=("Arial", 12, "bold"),
+                            bg=bg_color,
+                            fg=fg_color
+                        ).pack(anchor='w', pady=5)
+                        
+                        status_row = tk.Frame(holdings_frame, bg=bg_color)
+                        status_row.pack(fill=tk.X)
+                        
+                        # Ready to Sell
+                        ready_frame = tk.Frame(status_row, bg='#27ae60', relief='raised', bd=2)
+                        ready_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+                        
+                        tk.Label(
+                            ready_frame,
+                            text="✅ Ready to Sell",
+                            font=("Arial", 10, "bold"),
+                            bg='#27ae60',
+                            fg='white'
+                        ).pack(pady=3)
+                        
+                        if categorized['ready_to_sell']:
+                            for h in categorized['ready_to_sell']:
+                                tk.Label(
+                                    ready_frame,
+                                    text=f"{h['ticker']} {h['nav_pct']:+.2f}%",
+                                    font=("Arial", 9),
+                                    bg='#27ae60',
+                                    fg='white'
+                                ).pack(pady=1)
+                        else:
+                            tk.Label(
+                                ready_frame,
+                                text="(None)",
+                                font=("Arial", 9, "italic"),
+                                bg='#27ae60',
+                                fg='white'
+                            ).pack(pady=1)
+                        
+                        # Must Hold
+                        hold_frame = tk.Frame(status_row, bg='#e67e22', relief='raised', bd=2)
+                        hold_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+                        
+                        tk.Label(
+                            hold_frame,
+                            text="🔒 Must Hold",
+                            font=("Arial", 10, "bold"),
+                            bg='#e67e22',
+                            fg='white'
+                        ).pack(pady=3)
+                        
+                        if categorized['must_hold']:
+                            for h in categorized['must_hold']:
+                                tk.Label(
+                                    hold_frame,
+                                    text=f"{h['ticker']} {h['dividend_status']}",
+                                    font=("Arial", 9),
+                                    bg='#e67e22',
+                                    fg='white'
+                                ).pack(pady=1)
+                        else:
+                            tk.Label(
+                                hold_frame,
+                                text="(None)",
+                                font=("Arial", 9, "italic"),
+                                bg='#e67e22',
+                                fg='white'
+                            ).pack(pady=1)
+                        
+                        # Hold for NAV
+                        loss_frame = tk.Frame(status_row, bg='#e74c3c', relief='raised', bd=2)
+                        loss_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+                        
+                        tk.Label(
+                            loss_frame,
+                            text="🔴 Hold for NAV",
+                            font=("Arial", 10, "bold"),
+                            bg='#e74c3c',
+                            fg='white'
+                        ).pack(pady=3)
+                        
+                        if categorized['hold_for_nav']:
+                            for h in categorized['hold_for_nav']:
+                                tk.Label(
+                                    loss_frame,
+                                    text=f"{h['ticker']} {h['nav_pct']:+.2f}%",
+                                    font=("Arial", 9),
+                                    bg='#e74c3c',
+                                    fg='white'
+                                ).pack(pady=1)
+                        else:
+                            tk.Label(
+                                loss_frame,
+                                text="(None)",
+                                font=("Arial", 9, "italic"),
+                                bg='#e74c3c',
+                                fg='white'
+                            ).pack(pady=1)
+                    
+                    # Next rotation opportunities
+                    if next_targets:
+                        targets_frame = tk.Frame(alert_frame, bg=bg_color)
+                        targets_frame.pack(fill=tk.X, padx=20, pady=10)
+                        
+                        tk.Label(
+                            targets_frame,
+                            text="🎯 NEXT ROTATION OPPORTUNITIES (Within 2 Days):",
+                            font=("Arial", 11, "bold"),
+                            bg=bg_color,
+                            fg=fg_color
+                        ).pack(anchor='w', pady=5)
+                        
+                        for target in next_targets[:5]:
+                            urgency_icon = '⏰ URGENT' if target['is_urgent'] else '📅 Upcoming'
+                            target_text = f"{urgency_icon} | {target['ticker']} - Buy by: {target['deadline_description']} - Ex-Div: {target['next_ex_div_date'].strftime('%a %m/%d')}"
+                            
+                            tk.Label(
+                                targets_frame,
+                                text=target_text,
+                                font=("Arial", 9),
+                                bg=bg_color,
+                                fg=fg_color,
+                                anchor='w'
+                            ).pack(anchor='w', pady=1)
+                
+                except Exception as e:
+                    error_label = tk.Label(
+                        rotation_alert_container,
+                        text=f"⚠️ Rotation engine error: {str(e)}",
+                        font=("Arial", 10),
+                        bg='#fff3cd',
+                        fg='#856404'
+                    )
+                    error_label.pack(pady=5)
+            
             # Update data table with colors
             for item in tree.get_children():
                 tree.delete(item)
@@ -876,6 +1162,13 @@ def create_tkinter_gui_window():
         # Trophy container
         trophy_container = tk.Frame(scrollable_frame, bg='#f8f9fa')
         trophy_container.pack(fill=tk.X, padx=20, pady=10)
+        
+        # ===================================================================
+        # ROTATION ENGINE ALERT PANEL - Shows urgent buy/sell opportunities  
+        # ===================================================================
+        if ROTATION_ENGINE_AVAILABLE:
+            rotation_alert_container = tk.Frame(scrollable_frame, bg='#f8f9fa')
+            rotation_alert_container.pack(fill=tk.X, padx=20, pady=10)
         
         # Trade Tracking Section
         trade_frame = tk.Frame(scrollable_frame, bg='#ffffff', relief='raised', bd=3)
@@ -1736,7 +2029,29 @@ if __name__ == "__main__":
         right_buttons = tk.Frame(button_frame, bg='#f8f9fa')
         right_buttons.pack(side=tk.RIGHT, padx=20)
         
+        def open_settings():
+            """Open WeeklyPay Settings GUI"""
+            try:
+                import subprocess
+                import sys
+                import os
+                
+                # Get the correct path to the settings GUI
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                settings_path = os.path.join(script_dir, "weeklypay_settings.py")
+                
+                if not os.path.exists(settings_path):
+                    status_label.config(text="❌ Settings GUI not found!", fg="#dc3545")
+                    return
+                
+                subprocess.Popen([sys.executable, settings_path])
+                status_label.config(text="⚙️ Settings GUI launched! Manage tickers, ex-dividend dates, and pay dates.", fg="#6f42c1")
+                
+            except Exception as e:
+                status_label.config(text=f"❌ Error launching Settings: {str(e)}", fg="#dc3545")
+        
         settings_btn = tk.Button(right_buttons, text="⚙️ Settings", 
+                               command=open_settings,
                                font=("Arial", 12, "bold"),
                                bg='#6f42c1', fg='white', padx=20, pady=8,
                                relief='raised', bd=3, cursor='hand2')
@@ -1803,7 +2118,8 @@ def get_live_ex_dividend_dates():
     
     # CHECK: UPDATED: Accurate ex-dividend dates from user confirmation
     # Original 6 ETFs: Ex-dividend TUESDAY, Pay WEDNESDAY (weekly pattern)
-    # XOMO, BRKW, TSLW & QDTE: Ex-dividend THURSDAY, Pay FRIDAY (weekly pattern)
+    # XOMO & QDTE: Ex-dividend THURSDAY, Pay FRIDAY (weekly pattern)
+    # TSLW & BRKW: Ex-dividend MONDAY, Pay TUESDAY (weekly pattern) - UPDATED 10/30/25
     last_known_ex_div = {
         'MSFW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
         'NVDW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
@@ -1812,9 +2128,9 @@ def get_live_ex_dividend_dates():
         'GOOW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
         'NFLW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
         'XOMO': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Energy sector
-        'BRKW': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Financials sector
-        'TSLW': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - High volatility tech
-        'QDTE': datetime(2025, 10, 3)   # Thursday 10/3 (pays Friday) - Weekly Thursday payer
+        'QDTE': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Weekly Thursday payer
+        'TSLW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule
+        'BRKW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule (Financials)
     }
     
     for ticker in weekly_etfs:
@@ -1866,7 +2182,8 @@ def get_fallback_ex_dividend_dates():
     
     # SUCCESS UPDATED: Accurate last ex-dividend dates from user confirmation  
     # Original 6 ETFs: Ex-dividend TUESDAY, Pay WEDNESDAY (weekly pattern)
-    # XOMO, BRKW, TSLW & QDTE: Ex-dividend THURSDAY, Pay FRIDAY (weekly pattern)
+    # XOMO & QDTE: Ex-dividend THURSDAY, Pay FRIDAY (weekly pattern)
+    # TSLW & BRKW: Ex-dividend MONDAY, Pay TUESDAY (weekly pattern) - UPDATED 10/30/25
     last_known_ex_div = {
         'MSFW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
         'NVDW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
@@ -1875,9 +2192,9 @@ def get_fallback_ex_dividend_dates():
         'GOOW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
         'NFLW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
         'XOMO': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Energy sector
-        'BRKW': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Financials sector
-        'TSLW': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - High volatility tech
-        'QDTE': datetime(2025, 10, 3)   # Thursday 10/3 (pays Friday) - Weekly Thursday payer
+        'QDTE': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Weekly Thursday payer
+        'TSLW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule
+        'BRKW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule (Financials)
     }
     
     ex_dividend_dates = {}
@@ -1889,15 +2206,24 @@ def get_fallback_ex_dividend_dates():
             
             # Calculate next ex-dividend (weekly pattern)
             # Most ETFs: Tuesday ex-div, Wednesday pay
-            # XOMO, BRKW, TSLW & QDTE: Thursday ex-div, Friday pay
+            # XOMO & QDTE: Thursday ex-div, Friday pay
+            # TSLW & BRKW: Monday ex-div, Tuesday pay (UPDATED 10/30/25)
             days_since = (current_date - last_ex_div).days
             weeks_passed = days_since // 7
             next_ex_div = last_ex_div + timedelta(days=(weeks_passed + 1) * 7)
             ex_dividend_dates[ticker] = next_ex_div
         else:
             # Estimate based on weekly pattern
-            # Tuesday for most ETFs (weekday 1), Thursday for XOMO, BRKW, TSLW & QDTE (weekday 3)
-            if ticker in ['XOMO', 'BRKW', 'TSLW', 'QDTE']:
+            # Tuesday for most ETFs (weekday 1)
+            # Thursday for XOMO, QDTE (weekday 3)
+            # Monday for TSLW, BRKW (weekday 0)
+            if ticker in ['TSLW', 'BRKW']:
+                # Calculate days until next Monday
+                days_until_monday = (0 - current_date.weekday()) % 7
+                if days_until_monday == 0:
+                    days_until_monday = 7
+                ex_dividend_dates[ticker] = current_date + timedelta(days=days_until_monday)
+            elif ticker in ['XOMO', 'QDTE']:
                 # Calculate days until next Thursday
                 days_until_thursday = (3 - current_date.weekday()) % 7
                 if days_until_thursday == 0:
@@ -1997,16 +2323,73 @@ def generate_etf_data():
         # Calculate WeeklyPay score
         scores = weeklypay_scoring_formula(weekly_yield, rsi, days_to_earnings)
         
-        # ROTATION Generate simple rotation signal for this ETF
-        if rsi > 60 and weekly_yield > 0.5:
-            rotation_signal = {'signal': 'BUY', 'strength': 0.8}
-        elif rsi < 40 or weekly_yield < 0.3:
-            rotation_signal = {'signal': 'SELL', 'strength': 0.7}
-        else:
-            rotation_signal = {'signal': 'HOLD', 'strength': 0.5}
-        
-        # ROTATION Check NAV erosion protection
+        # ROTATION Check NAV erosion protection (load holdings if needed)
         nav_erosion_alert = check_nav_erosion(ticker, 1.0)  # 1% threshold
+        
+        # ROTATION Generate rotation signal with holdings awareness
+        # Load current holdings to check if we own this ticker
+        try:
+            trades_df = load_trade_data()
+            current_holdings = calculate_current_holdings(trades_df) if trades_df is not None and not trades_df.empty else pd.DataFrame()
+            
+            # Check if we currently own this ticker
+            owned = False
+            current_nav = None
+            entry_price = None
+            
+            if not current_holdings.empty and ticker in current_holdings['Ticker'].values:
+                owned = True
+                holding_row = current_holdings[current_holdings['Ticker'] == ticker].iloc[0]
+                entry_price = holding_row['Avg_Cost']
+                
+                # Get current price for NAV comparison
+                try:
+                    import yfinance as yf
+                    stock = yf.Ticker(ticker)
+                    current_nav = stock.info.get('currentPrice') or stock.info.get('regularMarketPrice')
+                except:
+                    current_nav = None
+            
+            # Determine rotation signal based on ownership and performance
+            if owned:
+                # We own this ticker - should we HOLD or SELL?
+                if current_nav and entry_price:
+                    nav_vs_entry_pct = ((current_nav - entry_price) / entry_price) * 100
+                    
+                    if nav_vs_entry_pct < -1.0:
+                        # NAV below entry by >1% - HOLD (don't sell at a loss)
+                        rotation_signal = {'signal': 'HOLD', 'strength': 0.9, 'reason': f'NAV {nav_vs_entry_pct:.1f}% below entry'}
+                    elif rsi < 35 or weekly_yield < 0.2:
+                        # Very weak metrics - consider SELL even if owned
+                        rotation_signal = {'signal': 'SELL', 'strength': 0.8, 'reason': f'Weak momentum/yield (RSI {rsi:.0f})'}
+                    elif rsi < 45:
+                        # Moderate weakness - HOLD and monitor
+                        rotation_signal = {'signal': 'HOLD', 'strength': 0.6, 'reason': f'Moderate momentum (RSI {rsi:.0f})'}
+                    else:
+                        # Strong performance - HOLD
+                        rotation_signal = {'signal': 'HOLD', 'strength': 0.7, 'reason': 'Strong performance, continue holding'}
+                else:
+                    # Can't get current price - default HOLD if owned
+                    rotation_signal = {'signal': 'HOLD', 'strength': 0.5, 'reason': 'Currently owned'}
+            else:
+                # We don't own this ticker - should we BUY?
+                if rsi > 60 and weekly_yield > 0.5:
+                    rotation_signal = {'signal': 'BUY', 'strength': 0.8, 'reason': f'Strong entry (RSI {rsi:.0f}, Yield {weekly_yield:.1f}%)'}
+                elif rsi < 40 or weekly_yield < 0.3:
+                    # Weak - don't buy, but not a SELL since we don't own it
+                    rotation_signal = {'signal': 'HOLD', 'strength': 0.3, 'reason': 'Weak metrics, avoid entry'}
+                else:
+                    # Neutral - not owned, no strong signal
+                    rotation_signal = {'signal': 'HOLD', 'strength': 0.5, 'reason': 'Neutral - no strong signal'}
+                    
+        except Exception as e:
+            # Fallback to simple logic if holdings check fails
+            if rsi > 60 and weekly_yield > 0.5:
+                rotation_signal = {'signal': 'BUY', 'strength': 0.8, 'reason': 'Strong metrics'}
+            elif rsi < 40 or weekly_yield < 0.3:
+                rotation_signal = {'signal': 'SELL', 'strength': 0.7, 'reason': 'Weak metrics'}
+            else:
+                rotation_signal = {'signal': 'HOLD', 'strength': 0.5, 'reason': 'Neutral'}
         
         data.append({
             'Ticker': ticker,
@@ -2026,6 +2409,7 @@ def generate_etf_data():
             'Earnings_Score': scores['earnings_score'],
             'Rotation_Signal': rotation_signal['signal'],
             'Signal_Strength': rotation_signal['strength'],
+            'Signal_Reason': rotation_signal.get('reason', ''),
             'NAV_Erosion_Alert': nav_erosion_alert
         })
     
@@ -2099,12 +2483,409 @@ st.markdown("""
         border-radius: 5px;
         margin: 5px 0;
     }
+    
+    /* Rotation Alert Styles */
+    .rotation-alert-critical {
+        background: linear-gradient(135deg, #ff4757, #ff6348);
+        border-left: 5px solid #ee5a6f;
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    
+    .rotation-alert-important {
+        background: linear-gradient(135deg, #ffa502, #ff7f50);
+        border-left: 5px solid #ff6348;
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    
+    .rotation-alert-info {
+        background: linear-gradient(135deg, #1e90ff, #00bfff);
+        border-left: 5px solid #1e90ff;
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: bold;
+        margin: 2px;
+    }
+    
+    .badge-ready {
+        background-color: #27ae60;
+        color: white;
+    }
+    
+    .badge-hold {
+        background-color: #e67e22;
+        color: white;
+    }
+    
+    .badge-loss {
+        background-color: #e74c3c;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# ============================================================================
+# ROTATION ENGINE INTEGRATION - Load Holdings & Generate Alerts
+# ============================================================================
+
+def get_current_holdings_for_rotation():
+    """
+    Load current holdings from weeklypay_trades.csv and prepare for rotation engine
+    Returns list of dicts with ticker, purchase_date, purchase_price, current_price, shares
+    """
+    holdings = []
+    
+    try:
+        if not os.path.exists('weeklypay_trades.csv'):
+            return holdings
+            
+        trades_df = pd.read_csv('weeklypay_trades.csv')
+        if trades_df.empty:
+            return holdings
+            
+        trades_df['Date'] = pd.to_datetime(trades_df['Date'])
+        
+        # Calculate current positions (BUY - SELL = net position)
+        position_summary = {}
+        
+        for _, row in trades_df.iterrows():
+            ticker = row['Ticker']
+            if ticker not in position_summary:
+                position_summary[ticker] = {
+                    'shares': 0,
+                    'total_cost': 0,
+                    'purchase_dates': []
+                }
+            
+            if row['Action'] == 'BUY':
+                position_summary[ticker]['shares'] += row['Quantity']
+                position_summary[ticker]['total_cost'] += row['Total']
+                position_summary[ticker]['purchase_dates'].append(row['Date'])
+            elif row['Action'] == 'SELL':
+                position_summary[ticker]['shares'] -= row['Quantity']
+        
+        # Convert to holdings format for rotation engine
+        eastern = pytz.timezone('America/New_York')
+        
+        for ticker, data in position_summary.items():
+            if data['shares'] > 0:  # Only include current holdings (net positive)
+                avg_purchase_price = data['total_cost'] / data['shares']
+                most_recent_purchase = max(data['purchase_dates'])
+                
+                # Make timezone-aware
+                if most_recent_purchase.tzinfo is None:
+                    most_recent_purchase = eastern.localize(most_recent_purchase)
+                
+                holdings.append({
+                    'ticker': ticker,
+                    'purchase_date': most_recent_purchase,
+                    'purchase_price': avg_purchase_price,
+                    'current_price': avg_purchase_price * 1.01,  # Placeholder - will be updated with live data
+                    'shares': data['shares']
+                })
+                
+    except Exception as e:
+        st.error(f"Error loading holdings: {str(e)}")
+    
+    return holdings
+
+def display_rotation_alert(holdings):
+    """Display rotation engine alert panel with buy/sell recommendations"""
+    if not ROTATION_ENGINE_AVAILABLE:
+        st.warning("⚠️ Rotation engine not available. Install rotation_engine.py for timing alerts.")
+        return
+    
+    try:
+        engine = RotationEngine()
+        
+        # Get current time and market status
+        current_time = engine.get_current_time_et()
+        is_market_open = engine.is_market_open()
+        
+        # Analyze holdings
+        if holdings:
+            categorized = engine.analyze_holdings(holdings)
+            alert = engine.get_rotation_alert(holdings)
+        else:
+            alert = {
+                'urgency': 'info',
+                'message': '💼 No current holdings. Ready to start rotation.',
+                'actions': []
+            }
+            categorized = {'ready_to_sell': [], 'must_hold': [], 'hold_for_nav': []}
+        
+        # Get next rotation targets
+        next_targets = engine.find_next_rotation_targets()
+        
+        # Display alert based on urgency
+        alert_class = f"rotation-alert-{alert['urgency']}"
+        
+        st.markdown(f"""
+        <div class="{alert_class}">
+            <h2 style='margin-top: 0; color: white;'>🚨 Rotation Alert</h2>
+            <h3 style='color: white;'>{current_time.strftime('%A, %B %d, %Y at %I:%M %p ET')}</h3>
+            <h4 style='color: white;'>{'🟢 Market OPEN' if is_market_open else '🔴 Market CLOSED'}</h4>
+            <p style='font-size: 18px; margin: 15px 0; color: white;'>{alert['message']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display recommended actions
+        if alert['actions']:
+            st.markdown("### 🎯 Recommended Actions")
+            
+            action_cols = st.columns(len(alert['actions']))
+            for i, action in enumerate(alert['actions']):
+                with action_cols[i]:
+                    if action['type'] == 'sell':
+                        st.success(f"**📤 SELL {action['ticker']}**")
+                        st.write(f"NAV: {action['nav_pct']:+.2f}%")
+                        st.write(f"✓ {action['reason']}")
+                    elif action['type'] == 'buy':
+                        st.warning(f"**📥 BUY {action['ticker']}**")
+                        st.write(f"⏰ {action['deadline']}")
+                        st.write(f"Ex-Div: {action['ex_div_date']}")
+        
+        # Display holdings status
+        if holdings:
+            st.markdown("### 💼 Current Holdings Status")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**✅ Ready to Sell**")
+                if categorized['ready_to_sell']:
+                    for h in categorized['ready_to_sell']:
+                        st.markdown(f"<span class='status-badge badge-ready'>{h['ticker']}</span> {h['nav_pct']:+.2f}%", unsafe_allow_html=True)
+                else:
+                    st.write("_(None)_")
+            
+            with col2:
+                st.markdown("**🔒 Must Hold**")
+                if categorized['must_hold']:
+                    for h in categorized['must_hold']:
+                        st.markdown(f"<span class='status-badge badge-hold'>{h['ticker']}</span> {h['dividend_status']}", unsafe_allow_html=True)
+                else:
+                    st.write("_(None)_")
+            
+            with col3:
+                st.markdown("**🔴 Hold for NAV**")
+                if categorized['hold_for_nav']:
+                    for h in categorized['hold_for_nav']:
+                        st.markdown(f"<span class='status-badge badge-loss'>{h['ticker']}</span> {h['nav_pct']:+.2f}%", unsafe_allow_html=True)
+                else:
+                    st.write("_(None)_")
+        
+        # Display next rotation opportunities
+        if next_targets:
+            st.markdown("### 🎯 Next Rotation Opportunities (Within 2 Days)")
+            
+            target_df = pd.DataFrame([
+                {
+                    'Ticker': t['ticker'],
+                    'Name': t['name'],
+                    'Ex-Dividend': t['next_ex_div_date'].strftime('%a %m/%d'),
+                    'Buy Deadline': t['deadline_description'],
+                    'Urgency': '⏰ URGENT' if t['is_urgent'] else '📅 Upcoming'
+                }
+                for t in next_targets[:5]  # Show top 5
+            ])
+            
+            st.dataframe(target_df, use_container_width=True, hide_index=True)
+        
+    except Exception as e:
+        st.error(f"❌ Rotation engine error: {str(e)}")
+
+
+def display_exit_window_monitor(current_prices):
+    """Display exit window monitor with NAV profit targets and timing suggestions"""
+    if not EXIT_MONITOR_AVAILABLE:
+        return
+    
+    try:
+        monitor = ExitWindowMonitor()
+        
+        # Get timing suggestion for current time of day
+        timing = monitor.get_intraday_timing_suggestion()
+        
+        # Get all exit windows
+        exit_windows = monitor.get_all_exit_windows(current_prices)
+        
+        if not exit_windows:
+            return  # No positions to monitor
+        
+        # Generate alert
+        alert = monitor.generate_exit_alert(exit_windows)
+        
+        # Determine color based on urgency
+        if alert['urgency'] == 'critical':
+            bg_color = '#27ae60'  # Green - take profit!
+            border_color = '#1e8449'
+        elif alert['urgency'] == 'important':
+            bg_color = '#3498db'  # Blue - good exits available
+            border_color = '#2980b9'
+        elif alert['urgency'] == 'moderate':
+            bg_color = '#f39c12'  # Orange - acceptable exits
+            border_color = '#d68910'
+        else:
+            bg_color = '#95a5a6'  # Gray - monitor only
+            border_color = '#7f8c8d'
+        
+        # Display exit window panel
+        st.markdown(f"""
+        <div style='background-color: {bg_color}; padding: 20px; border-radius: 10px; border: 3px solid {border_color}; margin-bottom: 20px;'>
+            <h2 style='margin-top: 0; color: white;'>🎯 Exit Window Monitor</h2>
+            <p style='font-size: 18px; margin: 10px 0; color: white;'><strong>{alert['message']}</strong></p>
+            <p style='font-size: 14px; margin: 5px 0; color: white;'>
+                ✅ Ideal: {alert['ideal_count']} | 🟢 Good: {alert['good_count']} | 
+                🟡 Acceptable: {alert['acceptable_count']} | 🔴 Loss: {alert['loss_count']}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display intraday timing suggestion
+        timing_color = {'green': '#27ae60', 'orange': '#f39c12', 'yellow': '#f1c40f', 'gray': '#95a5a6'}.get(timing['color'], '#95a5a6')
+        
+        st.markdown(f"""
+        <div style='background-color: {timing_color}; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
+            <h4 style='margin: 0; color: white;'>⏰ Intraday Timing: {timing['message']}</h4>
+            <p style='margin: 5px 0 0 0; color: white; font-size: 14px;'>Next Best Window: {timing['next_window']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display each exit window
+        for exit_window in exit_windows:
+            # Determine colors based on quality
+            if exit_window['quality'] == 'IDEAL':
+                card_bg = '#d4edda'
+                card_border = '#28a745'
+                card_text = '#155724'
+            elif exit_window['quality'] == 'GOOD':
+                card_bg = '#d1ecf1'
+                card_border = '#17a2b8'
+                card_text = '#0c5460'
+            elif exit_window['quality'] == 'ACCEPTABLE':
+                card_bg = '#fff3cd'
+                card_border = '#ffc107'
+                card_text = '#856404'
+            elif exit_window['quality'] == 'BREAKEVEN':
+                card_bg = '#f8f9fa'
+                card_border = '#6c757d'
+                card_text = '#383d41'
+            else:  # LOSS
+                card_bg = '#f8d7da'
+                card_border = '#dc3545'
+                card_text = '#721c24'
+            
+            col1, col2, col3 = st.columns([2, 2, 3])
+            
+            with col1:
+                st.markdown(f"""
+                <div style='background-color: {card_bg}; padding: 15px; border-radius: 8px; border-left: 5px solid {card_border}; height: 100%;'>
+                    <h3 style='margin: 0; color: {card_text};'>{exit_window['quality_icon']} {exit_window['ticker']}</h3>
+                    <p style='margin: 5px 0; color: {card_text}; font-size: 24px; font-weight: bold;'>{exit_window['quality']}</p>
+                    <p style='margin: 5px 0; color: {card_text}; font-size: 14px;'>
+                        Days Held: {exit_window['days_held']}<br>
+                        Dividend: {'✓ Received' if exit_window['dividend_received'] else '✗ Not Yet'}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div style='background-color: {card_bg}; padding: 15px; border-radius: 8px; height: 100%;'>
+                    <p style='margin: 0; color: {card_text}; font-size: 14px;'><strong>Purchase:</strong> ${exit_window['purchase_price']:.2f}</p>
+                    <p style='margin: 5px 0; color: {card_text}; font-size: 14px;'><strong>Current:</strong> ${exit_window['current_price']:.2f}</p>
+                    <p style='margin: 5px 0; color: {card_text}; font-size: 18px; font-weight: bold;'>
+                        NAV: ${exit_window['nav_change']:+.2f} ({exit_window['nav_change_pct']:+.2f}%)
+                    </p>
+                    <p style='margin: 5px 0; color: {card_text}; font-size: 16px;'>
+                        💰 Profit: ${exit_window['potential_profit']:+.2f}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div style='background-color: {card_bg}; padding: 15px; border-radius: 8px; height: 100%;'>
+                    <p style='margin: 0; color: {card_text}; font-size: 16px; font-weight: bold;'>
+                        📊 {exit_window['recommendation']}
+                    </p>
+                    <p style='margin: 10px 0 5px 0; color: {card_text}; font-size: 14px;'>
+                        <strong>Suggested Limit:</strong> ${exit_window['suggested_limit']:.2f}
+                    </p>
+                    <p style='margin: 0; color: {card_text}; font-size: 12px; font-style: italic;'>
+                        {exit_window['limit_strategy']}
+                    </p>
+                    <p style='margin: 10px 0 0 0; color: {card_text}; font-size: 12px;'>
+                        Total Dividends: ${exit_window['total_dividends']:.2f}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+    
+    except Exception as e:
+        st.error(f"❌ Exit window monitor error: {str(e)}")
+
 
 # Main header
 st.markdown('<h1 class="main-header">WeeklyPay Tactical Rotation Engine</h1>', unsafe_allow_html=True)
 st.markdown('<h3 style="text-align: center; color: #7f8c8d; margin-top: -10px;">Weekly Dividend ETFs | Real-time Rotation Signals</h3>', unsafe_allow_html=True)
+
+# ============================================================================
+# ROTATION ENGINE ALERT PANEL - Shows urgent buy/sell opportunities
+# ============================================================================
+if ROTATION_ENGINE_AVAILABLE:
+    holdings = get_current_holdings_for_rotation()
+    display_rotation_alert(holdings)
+    st.markdown("---")
+
+# ============================================================================
+# EXIT WINDOW MONITOR - Shows optimal exit timing for current positions
+# ============================================================================
+if EXIT_MONITOR_AVAILABLE:
+    # Get current prices from actual holdings
+    try:
+        import yfinance as yf
+        holdings = get_current_holdings_for_rotation()
+        current_prices = {}
+        
+        for holding in holdings:
+            ticker = holding['ticker']
+            try:
+                stock = yf.Ticker(ticker)
+                current_price = stock.info.get('currentPrice') or stock.info.get('regularMarketPrice')
+                if current_price:
+                    current_prices[ticker] = current_price
+                else:
+                    # Fallback to holding's current_price if available
+                    current_prices[ticker] = holding.get('current_price', holding['purchase_price'])
+            except:
+                # Use purchase price as fallback
+                current_prices[ticker] = holding['purchase_price']
+        
+        if current_prices:
+            display_exit_window_monitor(current_prices)
+            st.markdown("---")
+    except Exception as e:
+        pass  # Silently skip if error
 
 # Add refresh button and mode selector
 col1, col2, col3 = st.columns([1, 1, 1])
@@ -3040,7 +3821,8 @@ st.info("""
 
 **Payment Schedule** (Balanced Distribution):
 - 📅 **6 ETFs** (Tue ex-div): NVDW, AMDW, HOOW, MSFW, GOOW, NFLW → Pay WEDNESDAY
-- 📅 **4 ETFs** (Thu ex-div): XOMO, BRKW, TSLW, QDTE → Pay FRIDAY
+- 📅 **2 ETFs** (Mon ex-div): TSLW, BRKW → Pay TUESDAY *(Updated 10/30/25)*
+- 📅 **2 ETFs** (Thu ex-div): XOMO, QDTE → Pay FRIDAY
 
 **Diversification Goal**: 5 sectors, balanced payment schedule, yields 0.75%-1.20% weekly.
 """)
@@ -3252,8 +4034,63 @@ else:
 if not trades_df.empty:
     st.markdown("### 📋 Recent Trade History")
     
-    # Sort by date, most recent first
-    recent_trades = trades_df.sort_values('Date', ascending=False).head(10)
+    # Create a copy for display with additional columns
+    display_trades = trades_df.copy()
+    display_trades = display_trades.sort_values('Date', ascending=False)
+    
+    # Calculate dividend percentages for dividend transactions
+    display_trades['Dividend_Pct'] = 0.0
+    display_trades['Est_Yearly_Div_Pct'] = 0.0
+    
+    for idx, row in display_trades.iterrows():
+        if row['Action'] == 'DIVIDEND':
+            # Calculate dividend % based on current cost basis for this ticker
+            ticker = row['Ticker']
+            ticker_trades = trades_df[trades_df['Ticker'] == ticker]
+            
+            # Get all buys up to this dividend date
+            buys_before = ticker_trades[(ticker_trades['Action'] == 'BUY') & 
+                                       (ticker_trades['Date'] <= row['Date'])]
+            
+            if not buys_before.empty:
+                # Calculate average cost basis
+                total_shares_bought = buys_before['Quantity'].sum()
+                total_cost = buys_before['Total'].sum()
+                
+                if total_shares_bought > 0:
+                    avg_cost_per_share = total_cost / total_shares_bought
+                    cost_basis = row['Quantity'] * avg_cost_per_share
+                    
+                    # Dividend % for this payment
+                    div_pct = (row['Total'] / cost_basis * 100) if cost_basis > 0 else 0
+                    display_trades.at[idx, 'Dividend_Pct'] = div_pct
+                    
+                    # Estimated yearly % (weekly dividend * 52 weeks)
+                    est_yearly_pct = div_pct * 52
+                    display_trades.at[idx, 'Est_Yearly_Div_Pct'] = est_yearly_pct
+    
+    # Format the dividend percentage columns
+    display_trades['Dividend_Pct'] = display_trades['Dividend_Pct'].apply(
+        lambda x: f"{x:.2f}%" if x > 0 else ""
+    )
+    display_trades['Est_Yearly_Div_Pct'] = display_trades['Est_Yearly_Div_Pct'].apply(
+        lambda x: f"{x:.1f}%" if x > 0 else ""
+    )
+    
+    # Reorder columns to show dividend percentages after Total
+    cols = list(display_trades.columns)
+    if 'Total' in cols:
+        total_idx = cols.index('Total')
+        # Insert dividend columns after Total
+        cols.insert(total_idx + 1, cols.pop(cols.index('Dividend_Pct')))
+        cols.insert(total_idx + 2, cols.pop(cols.index('Est_Yearly_Div_Pct')))
+        display_trades = display_trades[cols]
+    
+    # Rename columns for better display
+    display_trades = display_trades.rename(columns={
+        'Dividend_Pct': 'Div %',
+        'Est_Yearly_Div_Pct': 'Est. Yearly %'
+    })
     
     # Style the dataframe with different colors for each trade type
     def style_trades(row):
@@ -3266,8 +4103,46 @@ if not trades_df.empty:
         else:
             return ['background-color: #e2e3e5; color: #383d41'] * len(row)
     
-    styled_trades = recent_trades.style.apply(style_trades, axis=1)
-    st.dataframe(styled_trades, use_container_width=True)
+    # Display all trades with scrolling (set height to enable scrolling)
+    styled_trades = display_trades.style.apply(style_trades, axis=1)
+    st.dataframe(styled_trades, use_container_width=True, height=600)  # 600px height enables scrolling
+    
+    st.markdown(f"**Total Trades:** {len(display_trades)} | **Showing:** All trades (scroll to view)")
+    
+    # Dividend Summary Statistics
+    dividend_trades = trades_df[trades_df['Action'] == 'DIVIDEND']
+    if not dividend_trades.empty:
+        st.markdown("#### 💰 Dividend Summary")
+        
+        total_dividends = dividend_trades['Total'].sum()
+        num_dividend_payments = len(dividend_trades)
+        avg_dividend = total_dividends / num_dividend_payments if num_dividend_payments > 0 else 0
+        
+        # Calculate average dividend % across all dividend payments
+        div_pcts = []
+        for idx, row in dividend_trades.iterrows():
+            ticker = row['Ticker']
+            ticker_trades = trades_df[trades_df['Ticker'] == ticker]
+            buys_before = ticker_trades[(ticker_trades['Action'] == 'BUY') & 
+                                       (ticker_trades['Date'] <= row['Date'])]
+            if not buys_before.empty:
+                total_shares_bought = buys_before['Quantity'].sum()
+                total_cost = buys_before['Total'].sum()
+                if total_shares_bought > 0:
+                    avg_cost_per_share = total_cost / total_shares_bought
+                    cost_basis = row['Quantity'] * avg_cost_per_share
+                    if cost_basis > 0:
+                        div_pct = (row['Total'] / cost_basis * 100)
+                        div_pcts.append(div_pct)
+        
+        avg_div_pct = sum(div_pcts) / len(div_pcts) if div_pcts else 0
+        avg_yearly_pct = avg_div_pct * 52  # Weekly dividend * 52 weeks
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Dividend Income", f"${total_dividends:,.2f}")
+        col2.metric("Number of Payments", num_dividend_payments)
+        col3.metric("Avg Weekly Div %", f"{avg_div_pct:.2f}%")
+        col4.metric("Est. Annual Yield", f"{avg_yearly_pct:.1f}%")
     
     # Show correlation between WeeklyPay scores and trade performance
     if len(trades_df) >= 5:
@@ -3319,7 +4194,7 @@ if not trades_df.empty and len(trades_df) >= 3:
     with chart_tab1:
         st.subheader("💰 Cumulative Profit & Loss Over Time")
         
-        st.info("ℹ️ **Note**: This chart shows *realized* gains (from actual sales) plus dividends. Unrealized gains on open positions are not included since live market prices are not tracked.")
+        st.info("ℹ️ **Note**: This chart shows total portfolio return including **unrealized gains** on open positions (using current market prices) plus all dividends received.")
         
         # Calculate cumulative P&L
         trades_sorted = trades_df.sort_values('Date')
@@ -3345,20 +4220,65 @@ if not trades_df.empty and len(trades_df) >= 3:
             trades_sorted.loc[idx, 'Running_Dividends'] = running_dividends
             trades_sorted.loc[idx, 'Running_Proceeds'] = running_proceeds
         
-        # Calculate cumulative REALIZED return (sales - purchases + dividends)
-        # This does NOT include unrealized gains on open positions
-        # For open positions (Running_Proceeds = 0), we only show dividends, not negative invested amount
-        trades_sorted['Realized_Capital_Gains'] = trades_sorted['Running_Proceeds'] - trades_sorted['Running_Invested']
+        # Calculate proper P&L: All dividends + realized gains/losses + unrealized gains/losses
         
-        # Only count capital gains if we've actually sold something (proceeds > 0)
-        # Otherwise capital gains = 0 (not negative invested amount!)
-        trades_sorted['Realized_Capital_Gains'] = trades_sorted.apply(
-            lambda row: row['Realized_Capital_Gains'] if row['Running_Proceeds'] > 0 else 0,
-            axis=1
-        )
+        # Step 1: Calculate realized gains/losses from closed positions
+        # For each ticker, match BUY and SELL transactions
+        realized_gains = 0
+        for ticker in trades_df['Ticker'].unique():
+            ticker_trades = trades_df[trades_df['Ticker'] == ticker].sort_values('Date')
+            
+            buys = ticker_trades[ticker_trades['Action'] == 'BUY']
+            sells = ticker_trades[ticker_trades['Action'] == 'SELL']
+            
+            total_cost = buys['Total'].sum()
+            total_proceeds = sells['Total'].sum()
+            
+            # For fully or partially closed positions, calculate realized gain/loss
+            if not sells.empty:
+                shares_bought = buys['Quantity'].sum()
+                shares_sold = sells['Quantity'].sum()
+                
+                if shares_sold > 0:
+                    # Calculate realized gain/loss proportionally
+                    avg_cost_per_share = total_cost / shares_bought if shares_bought > 0 else 0
+                    cost_of_sold_shares = avg_cost_per_share * shares_sold
+                    realized_gains += (total_proceeds - cost_of_sold_shares)
         
-        # Total return = realized capital gains (0 if no sales) + dividends
-        trades_sorted['Cumulative_Return'] = trades_sorted['Realized_Capital_Gains'] + trades_sorted['Running_Dividends']
+        # Step 2: Calculate unrealized gains/losses on open positions
+        unrealized_gains = 0
+        try:
+            current_holdings = calculate_current_holdings(trades_df)
+            
+            if not current_holdings.empty:
+                for _, holding in current_holdings.iterrows():
+                    try:
+                        ticker = holding['Ticker']
+                        shares = holding['Shares']
+                        avg_cost = holding['Avg_Cost']
+                        
+                        # Get current market price
+                        import yfinance as yf
+                        stock = yf.Ticker(ticker)
+                        current_price = stock.info.get('currentPrice') or stock.info.get('regularMarketPrice')
+                        
+                        if current_price:
+                            cost_basis = shares * avg_cost
+                            current_value = shares * current_price
+                            unrealized_gains += (current_value - cost_basis)
+                    except:
+                        # If can't get price, assume no unrealized gain/loss
+                        pass
+        except Exception as e:
+            print(f"Warning: Could not calculate unrealized gains: {e}")
+            unrealized_gains = 0
+        
+        # Step 3: Total return = all dividends + realized gains + unrealized gains
+        total_capital_gains = realized_gains + unrealized_gains
+        
+        # For the chart, show cumulative view over time
+        trades_sorted['Total_Return'] = total_capital_gains + trades_sorted['Running_Dividends']
+        trades_sorted['Cumulative_Return'] = trades_sorted['Total_Return']
         
         # Return percentage based on amount invested
         trades_sorted['Return_Percentage'] = (trades_sorted['Cumulative_Return'] / trades_sorted['Running_Invested'] * 100).fillna(0)
@@ -3390,18 +4310,25 @@ if not trades_df.empty and len(trades_df) >= 3:
         
         st.plotly_chart(fig_cumulative, use_container_width=True)
         
-        # Show key metrics
+        # Show key metrics breakdown
         final_return = trades_sorted['Cumulative_Return'].iloc[-1]
         final_return_pct = trades_sorted['Return_Percentage'].iloc[-1]
         
-        # Calculate realized capital gains (only if we've sold something)
-        realized_capital_gains = running_proceeds - running_invested if running_proceeds > 0 else 0
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Total Return", f"${final_return:,.2f}", delta=f"{final_return_pct:+.2f}%")
+        col2.metric("Total Dividends", f"${running_dividends:,.2f}")
+        col3.metric("Realized Gains", f"${realized_gains:,.2f}")
+        col4.metric("Unrealized Gains", f"${unrealized_gains:,.2f}")
+        col5.metric("Total Capital Gains", f"${total_capital_gains:,.2f}")
         
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Final Return", f"${final_return:,.2f}")
-        col2.metric("Return %", f"{final_return_pct:+.2f}%") 
-        col3.metric("Total Dividends", f"${running_dividends:,.2f}")
-        col4.metric("Realized Capital Gains", f"${realized_capital_gains:,.2f}")
+        # Show breakdown explanation
+        st.markdown("""
+        **Return Breakdown:**
+        - **Dividends**: All dividend payments received (open + closed positions)
+        - **Realized Gains**: Profit/loss from sold positions (sale price - cost basis)
+        - **Unrealized Gains**: Current profit/loss on open positions (current NAV - cost basis)
+        - **Total Return** = Dividends + Realized Gains + Unrealized Gains
+        """)
     
     with chart_tab2:
         st.subheader("📈 Performance Analysis by Ticker")

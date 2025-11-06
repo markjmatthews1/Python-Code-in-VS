@@ -12,7 +12,7 @@ class FinalHistoricalYieldUpdater:
         self.excel_path = r"C:\Users\mjmat\Python Code in VS\dividend_tracker\DividendTrackerApp\outputs\Dividends_2025.xlsx"
         # Output to the same location (overwrite)
         self.output_path = r"C:\Users\mjmat\Python Code in VS\dividend_tracker\DividendTrackerApp\outputs\Dividends_2025.xlsx"
-        self.cache_file = "portfolio_data_cache.json"
+        self.cache_file = r"C:\Users\mjmat\Python Code in VS\dividend_tracker\DividendTrackerApp\portfolio_data_cache.json"
         
         # Account mapping from cache to Excel groups
         self.account_mapping = {
@@ -80,8 +80,26 @@ class FinalHistoricalYieldUpdater:
         print(f"SUCCESS: Inserted yield column P with date {date_str}")
         print()
         
+        # Remove obsolete tickers first (no longer in accounts or below yield threshold)
+        print("STEP 5: Checking for obsolete tickers and removing them...")
+        obsolete_removed = self.remove_obsolete_tickers(ws, account_info, cache_data)
+        
+        if obsolete_removed:
+            print("INFO: Obsolete tickers removed - re-scanning boundaries to update account sections...")
+            account_info = self.find_account_groups_and_boundaries(ws)
+            print("SUCCESS: Boundaries updated after ticker removals")
+        
+        # Check and add missing tickers second
+        print("STEP 6: Checking for missing tickers and adding them...")
+        missing_added = self.add_missing_tickers(ws, account_info, cache_data)
+        
+        if missing_added:
+            print("INFO: Missing tickers added - re-scanning boundaries to update account sections...")
+            account_info = self.find_account_groups_and_boundaries(ws)
+            print("SUCCESS: Boundaries updated after ticker additions")
+        
         # Update each account with proper filtering
-        print("STEP 5: Updating account groups with high-yield dividend filtering...")
+        print("STEP 7: Updating account groups with high-yield dividend filtering...")
         
         for group_name, group_info in account_info.items():
             print(f"INFO: Processing {group_name}...")
@@ -106,17 +124,17 @@ class FinalHistoricalYieldUpdater:
             print()
         
         # Update yield data with color coding
-        print("STEP 6: Updating yield percentages...")
+        print("STEP 8: Updating yield percentages...")
         self.update_yield_data(ws, account_info, yields_data)
         print()
         
         # Apply formatting
-        print("STEP 7: Applying formatting...")
+        print("STEP 8: Applying formatting...")
         self.apply_group_formatting(ws, account_info)
         print()
         
         # Save workbook
-        print("STEP 8: Saving workbook...")
+        print("STEP 9: Saving workbook...")
         os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
         wb.save(self.output_path)
         print(f"SUCCESS: Successfully saved: {self.output_path}")
@@ -184,12 +202,28 @@ class FinalHistoricalYieldUpdater:
             start_row = account_info[group_name]["start_row"]
             
             if i < len(group_order) - 1:
-                # End is 3 rows before next group (calculation + blank + next header)
-                end_row = ws.max_row
+                # Find the end by looking for the next group header
+                end_row = start_row + 2  # Start after headers
+                next_group_start = ws.max_row
+                
+                # Find where the next group starts
                 for next_group in group_order[i+1:]:
                     if next_group in account_info:
-                        end_row = account_info[next_group]["start_row"] - 3
+                        next_group_start = account_info[next_group]["start_row"]
                         break
+                
+                # Count backwards from next group to find actual end of data
+                potential_end = next_group_start - 1
+                while potential_end > start_row + 2:
+                    cell_value = ws.cell(row=potential_end, column=1).value
+                    if cell_value and str(cell_value).strip():
+                        # Check if it's actually a ticker (not a blank or calculation row)
+                        ticker_text = str(cell_value).strip().upper()
+                        if len(ticker_text) <= 5 and ticker_text.isalpha():  # Valid ticker
+                            end_row = potential_end
+                            break
+                    potential_end -= 1
+                    
             else:
                 # Last group - find actual end of data
                 end_row = start_row + 2
@@ -206,6 +240,197 @@ class FinalHistoricalYieldUpdater:
             print(f"INFO: {group_name}: data rows {start_row+2} to {end_row}")
         
         return account_info
+    
+    def remove_obsolete_tickers(self, ws, account_info, cache_data):
+        """Remove tickers that are no longer in accounts or below yield threshold"""
+        print("INFO: Scanning for obsolete tickers to remove...")
+        
+        # Load yield data from cache
+        ticker_yields = cache_data.get('ticker_yields', {})
+        positions_data = cache_data.get('positions', {})
+        
+        if not ticker_yields or not positions_data:
+            print("WARNING: Missing yield or position data in cache")
+            return False
+        
+        # PHASE 1: Collect all obsolete ticker rows from all accounts
+        obsolete_rows = []  # List of (row_number, ticker, account_name, reason)
+        
+        for group_name, group_info in account_info.items():
+            cache_key = self.account_mapping.get(group_name)
+            if not cache_key or cache_key not in positions_data:
+                continue
+                
+            print(f"\nAnalyzing {group_name} for obsolete tickers...")
+            
+            # Get actual positions from cache for this account
+            account_positions = positions_data[cache_key]
+            
+            # Create set of current HIGH-YIELD dividend tickers in this account
+            current_dividend_tickers = set()
+            for pos in account_positions:
+                symbol = pos.get('symbol', '').upper()
+                if symbol in ticker_yields:
+                    yield_pct = ticker_yields[symbol].get('yield', 0)
+                    if yield_pct > self.min_yield_threshold:
+                        current_dividend_tickers.add(symbol)
+            
+            print(f"    CURRENT: {sorted(current_dividend_tickers)} (yield >{self.min_yield_threshold}%)")
+            
+            # Check existing tickers in sheet for this account
+            start_row = group_info["start_row"] + 2
+            end_row = group_info["end_row"]
+            
+            for row in range(start_row, end_row + 1):
+                ticker_cell = ws.cell(row=row, column=1)
+                if ticker_cell.value:
+                    ticker = str(ticker_cell.value).strip().upper()
+                    if len(ticker) <= 5 and ticker.isalpha():  # Valid ticker format
+                        # Check if this ticker should be removed
+                        reason = None
+                        
+                        if ticker not in current_dividend_tickers:
+                            if ticker not in ticker_yields:
+                                reason = "no yield data"
+                            elif ticker_yields[ticker].get('yield', 0) <= self.min_yield_threshold:
+                                reason = f"yield {ticker_yields[ticker].get('yield', 0):.2f}% below threshold"
+                            else:
+                                reason = "no longer in account positions"
+                        
+                        if reason:
+                            obsolete_rows.append((row, ticker, group_name, reason))
+                            print(f"    OBSOLETE: Row {row} - {ticker} ({reason})")
+        
+        if not obsolete_rows:
+            print(f"\nINFO: No obsolete tickers found - sheet is current")
+            return False
+        
+        # PHASE 2: Delete rows from TOP to BOTTOM to maintain proper row numbering
+        print(f"\nPHASE 2: Deleting {len(obsolete_rows)} obsolete ticker rows from top to bottom...")
+        
+        # Sort by row number in ASCENDING order (top to bottom deletion)
+        obsolete_rows.sort(key=lambda x: x[0])
+        
+        rows_deleted = 0
+        
+        # Delete from top to bottom, but adjust row numbers as we delete
+        for i, (original_row, ticker, account_name, reason) in enumerate(obsolete_rows):
+            # Adjust row number based on how many rows we've already deleted
+            adjusted_row = original_row - rows_deleted
+            
+            # Delete the entire row
+            ws.delete_rows(adjusted_row)
+            
+            print(f"    SUCCESS: DELETED Row {original_row} (adjusted to {adjusted_row}) - {ticker} from {account_name} ({reason})")
+            rows_deleted += 1
+        
+        print(f"\nSUCCESS: Obsolete ticker removal completed - {rows_deleted} rows deleted")
+        print("INFO: All data below shifted up naturally, preserving formatting and formulas")
+        
+        return True
+    
+    def add_missing_tickers(self, ws, account_info, cache_data):
+        """Smartly add missing HIGH-YIELD DIVIDEND TICKERS with proper row insertion to preserve formatting"""
+        print("INFO: Smart insertion of missing HIGH-YIELD DIVIDEND tickers...")
+        
+        # Load yield data from cache
+        ticker_yields = cache_data.get('ticker_yields', {})
+        positions_data = cache_data.get('positions', {})
+        
+        if not ticker_yields or not positions_data:
+            print("WARNING: Missing yield or position data in cache")
+            return False
+        
+        # PHASE 1: Collect all missing tickers from all accounts
+        all_missing_data = []  # List of (account, insert_row, ticker, yield_pct)
+        
+        for group_name, group_info in account_info.items():
+            cache_key = self.account_mapping.get(group_name)
+            if not cache_key or cache_key not in positions_data:
+                continue
+                
+            print(f"\nAnalyzing {group_name} for missing dividend tickers...")
+            
+            # Get actual positions from cache for this account
+            account_positions = positions_data[cache_key]
+            
+            # Filter to only HIGH-YIELD dividend stocks (>4%) from this account's positions
+            account_dividend_tickers = set()
+            for pos in account_positions:
+                symbol = pos.get('symbol', '').upper()
+                if symbol in ticker_yields:
+                    yield_pct = ticker_yields[symbol].get('yield', 0)
+                    if yield_pct > self.min_yield_threshold:
+                        account_dividend_tickers.add(symbol)
+                        print(f"    INFO: {symbol}: {yield_pct:.2f}% yield - QUALIFIES")
+                    else:
+                        print(f"    EXCLUDE: {symbol}: {yield_pct:.2f}% yield - EXCLUDED (too low)")
+            
+            if not account_dividend_tickers:
+                print(f"    INFO: No high-yield dividend stocks found in {group_name}")
+                continue
+            
+            # Get existing tickers in sheet for this account
+            start_row = group_info["start_row"] + 2
+            end_row = group_info["end_row"]
+            sheet_tickers = set()
+            
+            for row in range(start_row, end_row + 1):
+                ticker_cell = ws.cell(row=row, column=1)
+                if ticker_cell.value:
+                    ticker = str(ticker_cell.value).strip().upper()
+                    if len(ticker) <= 5 and ticker.isalpha():  # Valid ticker format
+                        sheet_tickers.add(ticker)
+            
+            print(f"    DATA: Sheet has: {sorted(sheet_tickers)}")
+            print(f"    DATA: Cache has: {sorted(account_dividend_tickers)}")
+            
+            # Find missing dividend tickers
+            missing_dividend_tickers = account_dividend_tickers - sheet_tickers
+            
+            if missing_dividend_tickers:
+                print(f"    MISSING: {sorted(missing_dividend_tickers)}")
+                
+                # Collect missing tickers for this account (will insert at end of account section)
+                insert_row = end_row + 1
+                for ticker in sorted(missing_dividend_tickers):
+                    yield_pct = ticker_yields[ticker].get('yield', 0)
+                    all_missing_data.append((group_name, insert_row, ticker, yield_pct))
+                    insert_row += 1  # Prepare for next ticker in same account
+            else:
+                print(f"    SUCCESS: All dividend tickers already present in {group_name}")
+        
+        if not all_missing_data:
+            print(f"\nINFO: All high-yield dividend tickers already present - sheet is up to date")
+            return False
+        
+        # PHASE 2: Insert tickers from BOTTOM to TOP to preserve row numbering
+        print(f"\nPHASE 2: Inserting {len(all_missing_data)} missing tickers from bottom to top...")
+        
+        # Sort by insert_row in DESCENDING order (bottom to top insertion)
+        all_missing_data.sort(key=lambda x: x[1], reverse=True)
+        
+        tickers_added = 0
+        
+        for account_name, insert_row, ticker, yield_pct in all_missing_data:
+            # Insert a new row at the calculated position
+            ws.insert_rows(insert_row)
+            
+            # Add ticker symbol with proper formatting
+            ws.cell(row=insert_row, column=1).value = ticker
+            ws.cell(row=insert_row, column=1).font = Font(name="Arial", size=12, bold=True, color="3072C2")
+            
+            # Initialize other columns with placeholders
+            ws.cell(row=insert_row, column=2).value = 0  # Qty - will be updated by position update
+            ws.cell(row=insert_row, column=4).value = 0  # Price - will be updated by position update
+            
+            print(f"    SUCCESS: INSERTED {ticker} in {account_name} at row {insert_row} ({yield_pct:.2f}% yield)")
+            tickers_added += 1
+        
+        print(f"\nSUCCESS: Smart insertion completed - {tickers_added} missing HIGH-YIELD dividend tickers added")
+        print("INFO: All existing formatting, formulas, and account structure preserved")
+        
+        return True
     
     def clear_existing_tickers(self, ws, group_info):
         """Clear only quantity and price columns while preserving ticker symbols and other data"""
@@ -388,12 +613,12 @@ class FinalHistoricalYieldUpdater:
                         yield_cell.fill = PatternFill()  # Clear any existing fill
                         direction = "NEW"
                     elif current_yield > previous_yield:
-                        # Green background for increase (#90EE90 from plan)
-                        yield_cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+                        # Bright green background for increase (#00FF00)
+                        yield_cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
                         direction = "UP"
                     elif current_yield < previous_yield:
-                        # Red background for decrease (#FF7C80 from plan)
-                        yield_cell.fill = PatternFill(start_color="FF7C80", end_color="FF7C80", fill_type="solid")
+                        # Bright red background for decrease (#FF0000)
+                        yield_cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
                         direction = "DOWN"
                     else:
                         # Yellow background when old value equals new value (#FFFF00 from plan)

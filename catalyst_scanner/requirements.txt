@@ -1,0 +1,55 @@
+# Catalyst Scanner Requirements
+# Phase 4 Advanced Features Integration
+
+# Core dependencies
+pandas>=1.3.0
+numpy>=1.21.0
+requests>=2.25.0
+openpyxl>=3.0.7
+
+# GUI framework
+tkinter  # Usually included with Python
+
+# Data analysis and ML preparation
+scipy>=1.7.0
+scikit-learn>=1.0.0
+
+# Database for performance tracking
+# sqlite3 is included with Python
+
+# Optional: Enhanced data providers
+yfinance>=0.1.63
+alpha-vantage>=2.3.1
+
+# Development and testing
+pytest>=6.2.0
+pytest-cov>=2.12.0
+
+# Logging and monitoring
+colorama>=0.4.4
+
+# Authentication and security
+requests-oauthlib>=1.3.0
+cryptography>=3.4.7
+
+# Network and API handling
+urllib3>=1.26.0
+certifi>=2021.5.30
+
+# Date/time handling
+python-dateutil>=2.8.0
+
+# Configuration management
+configparser  # Included with Python
+json  # Included with Python
+
+# Concurrent processing (for real-time data)
+# concurrent.futures is included with Python
+threading  # Included with Python
+
+# Error handling and validation
+marshmallow>=3.12.0
+
+# Optional: Advanced charting (for future enhancements)
+matplotlib>=3.4.0
+plotly>=5.0.0

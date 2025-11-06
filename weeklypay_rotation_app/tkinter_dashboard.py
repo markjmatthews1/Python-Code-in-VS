@@ -10,6 +10,9 @@ import datetime
 import sys
 from pathlib import Path
 import threading
+import pytz
+import os
+import pandas as pd
 
 # Add src directory to path
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -17,6 +20,14 @@ sys.path.append(str(Path(__file__).parent / "src"))
 from src.etf_tracker import ETFTracker
 from src.signal_engine import RotationRulesEngine
 from src.data_collector import DataCollector
+
+# Import rotation engine for timing and NAV-based rotation logic
+try:
+    from rotation_engine import RotationEngine
+    ROTATION_ENGINE_AVAILABLE = True
+except ImportError:
+    ROTATION_ENGINE_AVAILABLE = False
+    print("WARNING: rotation_engine.py not found - rotation features disabled")
 
 class WeeklyPayGUI:
     """Simple GUI for WeeklyPay™ rotation system"""
@@ -44,14 +55,43 @@ class WeeklyPayGUI:
             self.engine = RotationRulesEngine(self.tracker)
             self.data_collector = DataCollector(self.tracker)
             self.data_collector.set_signal_engine(self.engine)
+            
+            # Initialize rotation engine for timing and NAV alerts
+            if ROTATION_ENGINE_AVAILABLE:
+                self.rotation_engine = RotationEngine()
+            else:
+                self.rotation_engine = None
         except Exception as e:
             messagebox.showerror("Error", f"Failed to initialize system: {e}")
     
     def create_widgets(self):
         """Create GUI widgets"""
         
-        # Title
-        title_frame = tk.Frame(self.root, bg='white')
+        # Create main canvas with scrollbar
+        main_canvas = tk.Canvas(self.root, bg='white', highlightthickness=0)
+        scrollbar = tk.Scrollbar(self.root, orient="vertical", command=main_canvas.yview)
+        self.scrollable_frame = tk.Frame(main_canvas, bg='white')
+        
+        # Configure scrolling
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+        )
+        
+        main_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        main_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        scrollbar.pack(side="right", fill="y")
+        main_canvas.pack(side="left", fill="both", expand=True)
+        
+        # Bind mousewheel scrolling
+        def _on_mousewheel(event):
+            main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        main_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Title (inside scrollable frame)
+        title_frame = tk.Frame(self.scrollable_frame, bg='white')
         title_frame.pack(fill=tk.X, padx=10, pady=10)
         
         title_label = tk.Label(
@@ -63,8 +103,14 @@ class WeeklyPayGUI:
         )
         title_label.pack()
         
-        # Control buttons
-        control_frame = tk.Frame(self.root, bg='white')
+        # ===================================================================
+        # ROTATION ENGINE ALERT PANEL - Shows urgent buy/sell opportunities
+        # ===================================================================
+        if self.rotation_engine:
+            self.create_rotation_alert_panel()
+        
+        # Control buttons (inside scrollable frame)
+        control_frame = tk.Frame(self.scrollable_frame, bg='white')
         control_frame.pack(fill=tk.X, padx=10, pady=5)
         
         refresh_btn = tk.Button(
@@ -99,8 +145,8 @@ class WeeklyPayGUI:
         )
         self.status_label.pack(side=tk.RIGHT, padx=5)
         
-        # Create notebook for tabs
-        self.notebook = ttk.Notebook(self.root)
+        # Create notebook for tabs (inside scrollable frame)
+        self.notebook = ttk.Notebook(self.scrollable_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Tab 1: Rotation Alerts
@@ -122,6 +168,286 @@ class WeeklyPayGUI:
         self.payouts_frame = tk.Frame(self.notebook, bg='white')
         self.notebook.add(self.payouts_frame, text="💰 Payouts")
         self.create_payouts_tab()
+    
+    def create_rotation_alert_panel(self):
+        """Create rotation engine alert panel at top of dashboard"""
+        # Get current holdings
+        holdings = self.get_current_holdings_for_rotation()
+        
+        # Get rotation alert data
+        current_time = self.rotation_engine.get_current_time_et()
+        is_market_open = self.rotation_engine.is_market_open()
+        
+        if holdings:
+            categorized = self.rotation_engine.analyze_holdings(holdings)
+            alert = self.rotation_engine.get_rotation_alert(holdings)
+        else:
+            alert = {
+                'urgency': 'info',
+                'message': '💼 No current holdings. Ready to start rotation.',
+                'actions': []
+            }
+            categorized = {'ready_to_sell': [], 'must_hold': [], 'hold_for_nav': []}
+        
+        # Get next rotation targets
+        next_targets = self.rotation_engine.find_next_rotation_targets()
+        
+        # Determine alert color
+        if alert['urgency'] == 'critical':
+            bg_color = '#ff4757'  # Red
+            fg_color = 'white'
+        elif alert['urgency'] == 'important':
+            bg_color = '#ffa502'  # Orange
+            fg_color = 'white'
+        else:
+            bg_color = '#1e90ff'  # Blue
+            fg_color = 'white'
+        
+        # Create alert frame (inside scrollable frame)
+        alert_frame = tk.Frame(self.scrollable_frame, bg=bg_color, relief=tk.RAISED, bd=3)
+        alert_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Header with time and market status
+        header_text = f"🚨 ROTATION ALERT - {current_time.strftime('%A, %B %d, %Y at %I:%M %p ET')}\n"
+        header_text += f"{'🟢 Market OPEN' if is_market_open else '🔴 Market CLOSED'}"
+        
+        header_label = tk.Label(
+            alert_frame,
+            text=header_text,
+            font=("Arial", 12, "bold"),
+            bg=bg_color,
+            fg=fg_color
+        )
+        header_label.pack(pady=5)
+        
+        # Alert message
+        message_label = tk.Label(
+            alert_frame,
+            text=alert['message'],
+            font=("Arial", 14, "bold"),
+            bg=bg_color,
+            fg=fg_color,
+            wraplength=900
+        )
+        message_label.pack(pady=5)
+        
+        # Actions section
+        if alert['actions']:
+            actions_frame = tk.Frame(alert_frame, bg=bg_color)
+            actions_frame.pack(fill=tk.X, padx=20, pady=10)
+            
+            tk.Label(
+                actions_frame,
+                text="🎯 RECOMMENDED ACTIONS:",
+                font=("Arial", 12, "bold"),
+                bg=bg_color,
+                fg=fg_color
+            ).pack(anchor='w')
+            
+            for action in alert['actions']:
+                if action['type'] == 'sell':
+                    action_text = f"📤 SELL {action['ticker']} - NAV: {action['nav_pct']:+.2f}% - {action['reason']}"
+                    action_bg = '#27ae60'
+                elif action['type'] == 'buy':
+                    action_text = f"📥 BUY {action['ticker']} - Deadline: {action['deadline']} - Ex-Div: {action['ex_div_date']}"
+                    action_bg = '#e67e22'
+                else:
+                    continue
+                
+                action_label = tk.Label(
+                    actions_frame,
+                    text=action_text,
+                    font=("Arial", 11),
+                    bg=action_bg,
+                    fg='white',
+                    relief=tk.RAISED,
+                    bd=2,
+                    padx=10,
+                    pady=5
+                )
+                action_label.pack(anchor='w', pady=2)
+        
+        # Holdings status section
+        if holdings:
+            holdings_frame = tk.Frame(alert_frame, bg=bg_color)
+            holdings_frame.pack(fill=tk.X, padx=20, pady=10)
+            
+            # Create 3 columns for holdings status
+            status_container = tk.Frame(holdings_frame, bg=bg_color)
+            status_container.pack(fill=tk.X)
+            
+            # Ready to Sell
+            ready_frame = tk.Frame(status_container, bg='#27ae60', relief=tk.RAISED, bd=2)
+            ready_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            
+            tk.Label(
+                ready_frame,
+                text="✅ Ready to Sell",
+                font=("Arial", 11, "bold"),
+                bg='#27ae60',
+                fg='white'
+            ).pack(pady=3)
+            
+            if categorized['ready_to_sell']:
+                for h in categorized['ready_to_sell']:
+                    tk.Label(
+                        ready_frame,
+                        text=f"{h['ticker']} {h['nav_pct']:+.2f}%",
+                        font=("Arial", 10),
+                        bg='#27ae60',
+                        fg='white'
+                    ).pack()
+            else:
+                tk.Label(
+                    ready_frame,
+                    text="(None)",
+                    font=("Arial", 10, "italic"),
+                    bg='#27ae60',
+                    fg='white'
+                ).pack()
+            
+            # Must Hold
+            hold_frame = tk.Frame(status_container, bg='#e67e22', relief=tk.RAISED, bd=2)
+            hold_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            
+            tk.Label(
+                hold_frame,
+                text="🔒 Must Hold",
+                font=("Arial", 11, "bold"),
+                bg='#e67e22',
+                fg='white'
+            ).pack(pady=3)
+            
+            if categorized['must_hold']:
+                for h in categorized['must_hold']:
+                    tk.Label(
+                        hold_frame,
+                        text=f"{h['ticker']} {h['dividend_status']}",
+                        font=("Arial", 10),
+                        bg='#e67e22',
+                        fg='white'
+                    ).pack()
+            else:
+                tk.Label(
+                    hold_frame,
+                    text="(None)",
+                    font=("Arial", 10, "italic"),
+                    bg='#e67e22',
+                    fg='white'
+                ).pack()
+            
+            # Hold for NAV
+            loss_frame = tk.Frame(status_container, bg='#e74c3c', relief=tk.RAISED, bd=2)
+            loss_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            
+            tk.Label(
+                loss_frame,
+                text="🔴 Hold for NAV",
+                font=("Arial", 11, "bold"),
+                bg='#e74c3c',
+                fg='white'
+            ).pack(pady=3)
+            
+            if categorized['hold_for_nav']:
+                for h in categorized['hold_for_nav']:
+                    tk.Label(
+                        loss_frame,
+                        text=f"{h['ticker']} {h['nav_pct']:+.2f}%",
+                        font=("Arial", 10),
+                        bg='#e74c3c',
+                        fg='white'
+                    ).pack()
+            else:
+                tk.Label(
+                    loss_frame,
+                    text="(None)",
+                    font=("Arial", 10, "italic"),
+                    bg='#e74c3c',
+                    fg='white'
+                ).pack()
+        
+        # Next rotation opportunities
+        if next_targets:
+            targets_frame = tk.Frame(alert_frame, bg=bg_color)
+            targets_frame.pack(fill=tk.X, padx=20, pady=10)
+            
+            tk.Label(
+                targets_frame,
+                text="🎯 NEXT ROTATION OPPORTUNITIES (Within 2 Days):",
+                font=("Arial", 11, "bold"),
+                bg=bg_color,
+                fg=fg_color
+            ).pack(anchor='w', pady=5)
+            
+            for target in next_targets[:5]:  # Show top 5
+                urgency_icon = '⏰ URGENT' if target['is_urgent'] else '📅 Upcoming'
+                target_text = f"{urgency_icon} | {target['ticker']} - Buy by: {target['deadline_description']} - Ex-Div: {target['next_ex_div_date'].strftime('%a %m/%d')}"
+                
+                tk.Label(
+                    targets_frame,
+                    text=target_text,
+                    font=("Arial", 10),
+                    bg=bg_color,
+                    fg=fg_color,
+                    anchor='w'
+                ).pack(anchor='w', pady=1)
+    
+    def get_current_holdings_for_rotation(self):
+        """Load current holdings from weeklypay_trades.csv for rotation engine"""
+        holdings = []
+        
+        try:
+            if not os.path.exists('weeklypay_trades.csv'):
+                return holdings
+                
+            trades_df = pd.read_csv('weeklypay_trades.csv')
+            if trades_df.empty:
+                return holdings
+                
+            trades_df['Date'] = pd.to_datetime(trades_df['Date'])
+            
+            # Calculate current positions
+            position_summary = {}
+            
+            for _, row in trades_df.iterrows():
+                ticker = row['Ticker']
+                if ticker not in position_summary:
+                    position_summary[ticker] = {
+                        'shares': 0,
+                        'total_cost': 0,
+                        'purchase_dates': []
+                    }
+                
+                if row['Action'] == 'BUY':
+                    position_summary[ticker]['shares'] += row['Quantity']
+                    position_summary[ticker]['total_cost'] += row['Total']
+                    position_summary[ticker]['purchase_dates'].append(row['Date'])
+                elif row['Action'] == 'SELL':
+                    position_summary[ticker]['shares'] -= row['Quantity']
+            
+            # Convert to holdings format
+            eastern = pytz.timezone('America/New_York')
+            
+            for ticker, data in position_summary.items():
+                if data['shares'] > 0:
+                    avg_purchase_price = data['total_cost'] / data['shares']
+                    most_recent_purchase = max(data['purchase_dates'])
+                    
+                    if most_recent_purchase.tzinfo is None:
+                        most_recent_purchase = eastern.localize(most_recent_purchase)
+                    
+                    holdings.append({
+                        'ticker': ticker,
+                        'purchase_date': most_recent_purchase,
+                        'purchase_price': avg_purchase_price,
+                        'current_price': avg_purchase_price * 1.01,  # Placeholder
+                        'shares': data['shares']
+                    })
+                    
+        except Exception as e:
+            print(f"Error loading holdings: {str(e)}")
+        
+        return holdings
     
     def create_alerts_tab(self):
         """Create rotation alerts tab"""

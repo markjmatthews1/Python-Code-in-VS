@@ -15,27 +15,62 @@ import yfinance as yf
 # ==== Finnhub API Key ====
 FINNHUB_API_KEY = "d0o631hr01qn5ghnfangd0o631hr01qn5ghnfao0"  # <-- Replace with your actual Finnhub API key
 
+# Initialize global session variables
+session = None
+base_url = None
+
+def initialize_etrade_session(force_new=False):
+    """Initialize E*TRADE session and set global variables"""
+    global session, base_url
+    try:
+        print("Initializing E*TRADE session...")
+        if force_new:
+            print("Forcing new authentication (expired tokens)...")
+        session, base_url = get_etrade_session(force_new=force_new)
+        print(f"Session initialized successfully. Base URL: {base_url}")
+        return True
+    except Exception as e:
+        print(f"Failed to initialize E*TRADE session: {e}")
+        return False
+
 def get_etrade_quote(symbol, retry=True):
     global session, base_url
+    
+    # Check if session is initialized
+    if session is None or base_url is None:
+        print("Session not initialized, attempting to initialize...")
+        if not initialize_etrade_session():
+            raise Exception("Failed to initialize E*TRADE session")
 
     url = f"{base_url}/v1/market/quote/{symbol}.json"
-    response = session.get(url)
-    if response.status_code == 401 and retry:
-        print("E*TRADE token expired, refreshing session...")
-        session, base_url = get_etrade_session()
-        # Only retry ONCE with retry=False
-        return get_etrade_quote(symbol, retry=False)
-    if response.status_code == 401:
-        # If we already retried, raise an error
-        raise Exception("E*TRADE authentication failed after token refresh (401 Unauthorized).")
-    if response.status_code != 200:
-        raise Exception(f"API error: {response.status_code} {response.text}")
-    data = response.json()
+    
     try:
-        quote = data['QuoteResponse']['QuoteData'][0]['All']
-        return quote
-    except Exception as e:
-        raise Exception(f"Could not parse quote data: {e}")
+        response = session.get(url)
+        
+        if response.status_code == 401 and retry:
+            print("E*TRADE token expired, refreshing session...")
+            if initialize_etrade_session(force_new=True):  # Force complete re-auth
+                # Only retry ONCE with retry=False
+                return get_etrade_quote(symbol, retry=False)
+            else:
+                raise Exception("Failed to refresh E*TRADE session")
+                
+        if response.status_code == 401:
+            # If we already retried, raise an error
+            raise Exception("E*TRADE authentication failed after token refresh (401 Unauthorized).")
+            
+        if response.status_code != 200:
+            raise Exception(f"API error: {response.status_code} {response.text}")
+            
+        data = response.json()
+        try:
+            quote = data['QuoteResponse']['QuoteData'][0]['All']
+            return quote
+        except Exception as e:
+            raise Exception(f"Could not parse quote data: {e}")
+            
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Network error: {e}")
 
 def get_yahoo_data(symbol):
     ticker = yf.Ticker(symbol)
@@ -166,8 +201,41 @@ def return_to_menu():
     root.destroy()
    
 if __name__ == "__main__":
-    # Authenticate and get session
-    session, base_url = get_etrade_session()
+    # Initialize E*TRADE authentication
+    print("Starting Get Quote application...")
+    
+    # Check if we need fresh tokens (expired)
+    from datetime import datetime
+    import json
+    import os
+    
+    auth_file_path = "C:/Users/mjmat/Python Code in VS/auth_data.json"
+    force_new_auth = False
+    
+    if os.path.exists(auth_file_path):
+        try:
+            with open(auth_file_path, "r") as file:
+                data = json.load(file)
+            token_date = data.get("date")
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            if token_date != today:
+                print(f"⚠️ Tokens are from {token_date}, but today is {today}")
+                print("🔄 Will force new authentication with E*TRADE website")
+                force_new_auth = True
+            else:
+                print(f"✅ Tokens are current (from {token_date})")
+        except Exception as e:
+            print(f"⚠️ Error checking token date: {e}")
+            force_new_auth = True
+    else:
+        print("⚠️ No token file found, will need new authentication")
+        force_new_auth = True
+    
+    if not initialize_etrade_session(force_new=force_new_auth):
+        messagebox.showerror("Authentication Error", 
+                           "Failed to authenticate with E*TRADE. Please check your credentials and try again.")
+        sys.exit(1)
 
     # Build GUI
     root = tk.Tk()

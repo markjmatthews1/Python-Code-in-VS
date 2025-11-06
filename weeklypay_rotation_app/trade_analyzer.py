@@ -4,6 +4,78 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, font
 import os
 
+def get_current_prices(tickers):
+    """Fetch current prices for a list of tickers using yfinance"""
+    prices = {}
+    try:
+        import yfinance as yf
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                # Try different price fields
+                current_price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
+                if current_price:
+                    prices[ticker] = current_price
+            except Exception as e:
+                print(f"Error fetching price for {ticker}: {e}")
+    except ImportError:
+        print("yfinance not available for price fetching")
+    return prices
+
+def calculate_current_holdings(trades_df):
+    """Calculate current holdings with live prices and total returns"""
+    if trades_df.empty:
+        return pd.DataFrame()
+    
+    holdings = []
+    
+    # Get unique tickers with open positions
+    for ticker in trades_df['Ticker'].unique():
+        ticker_trades = trades_df[trades_df['Ticker'] == ticker]
+        
+        # Calculate shares
+        shares_bought = ticker_trades[ticker_trades['Action'] == 'BUY']['Quantity'].sum()
+        shares_sold = ticker_trades[ticker_trades['Action'] == 'SELL']['Quantity'].sum()
+        current_shares = shares_bought - shares_sold
+        
+        if current_shares > 0:
+            # Calculate cost basis
+            total_invested = ticker_trades[ticker_trades['Action'] == 'BUY']['Total'].sum()
+            total_sold_proceeds = ticker_trades[ticker_trades['Action'] == 'SELL']['Total'].sum()
+            net_investment = total_invested - total_sold_proceeds
+            avg_cost = net_investment / current_shares if current_shares > 0 else 0
+            
+            # Get dividends received
+            total_dividends = ticker_trades[ticker_trades['Action'] == 'DIVIDEND']['Total'].sum()
+            
+            holdings.append({
+                'Ticker': ticker,
+                'Shares': current_shares,
+                'Avg_Cost': avg_cost,
+                'Investment': net_investment,
+                'Dividends': total_dividends
+            })
+    
+    if not holdings:
+        return pd.DataFrame()
+    
+    holdings_df = pd.DataFrame(holdings)
+    
+    # Fetch current prices
+    tickers = holdings_df['Ticker'].tolist()
+    current_prices = get_current_prices(tickers)
+    
+    # Add current prices and calculate values
+    holdings_df['Current_Price'] = holdings_df['Ticker'].map(current_prices)
+    holdings_df['Current_Value'] = holdings_df['Current_Price'] * holdings_df['Shares']
+    holdings_df['NAV_Change'] = holdings_df['Current_Value'] - holdings_df['Investment']
+    holdings_df['NAV_Change_Pct'] = (holdings_df['NAV_Change'] / holdings_df['Investment'] * 100).fillna(0)
+    holdings_df['Total_Return'] = holdings_df['NAV_Change'] + holdings_df['Dividends']
+    holdings_df['Total_Return_Pct'] = (holdings_df['Total_Return'] / holdings_df['Investment'] * 100).fillna(0)
+    
+    return holdings_df
+
 def create_trade_analyzer():
     root = tk.Tk()
     root.title("WeeklyPay Trade Performance Analyzer")

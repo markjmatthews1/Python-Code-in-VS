@@ -416,25 +416,42 @@ merged_data_dict = {}
 filtered_df = None
 df = None
 session = None
+_day_splash = None
+_day_splash_label = None
+_day_status_label = None
 
 # --- Splash Screen Functions ---
 def create_splash_window():
     """Create and manage splash window in separate thread"""
-    global _day_splash, _day_splash_label
+    global _day_splash, _day_splash_label, _day_status_label
     _day_splash = tk.Tk()
     _day_splash.title("Loading Day Trading Dashboard...")
-    _day_splash.geometry("420x130")
+    _day_splash.geometry("500x180")
     _day_splash.configure(bg="#ffe066")  # Vibrant yellow background
     _day_splash.attributes("-topmost", True)  # Always on top
+    
+    # Main title label
     _day_splash_label = tk.Label(
         _day_splash,
         text="Day Trading Dashboard is starting...\nPlease wait...",
-        font=("Segoe UI", 17, "bold"),
+        font=("Segoe UI", 16, "bold"),
         fg="#0a2463",  # Deep blue text for high contrast
         bg="#ffe066",
-        pady=32
+        pady=15
     )
-    _day_splash_label.pack(expand=True, fill="both")
+    _day_splash_label.pack(expand=False, fill="both")
+    
+    # Dynamic status label (what the app is working on)
+    _day_status_label = tk.Label(
+        _day_splash,
+        text="Working on: Initializing...",
+        font=("Segoe UI", 12),
+        fg="#1e5090",  # Slightly lighter blue for secondary text
+        bg="#ffe066",
+        pady=10,
+        wraplength=480
+    )
+    _day_status_label.pack(expand=True, fill="both")
     
     # Start the Tkinter event loop in this thread
     try:
@@ -444,10 +461,14 @@ def create_splash_window():
 
 def update_splash_message(message):
     """Update splash window message safely"""
-    global _day_splash, _day_splash_label
+    global _day_splash, _day_splash_label, _day_status_label
     try:
         if _day_splash and _day_splash.winfo_exists():
-            _day_splash_label.config(text=message)
+            # Check if message contains "Working on:" to determine which label to update
+            if message.startswith("Working on:"):
+                _day_status_label.config(text=message)
+            else:
+                _day_splash_label.config(text=message)
             _day_splash.update_idletasks()
     except:
         pass  # Window no longer exists
@@ -969,6 +990,9 @@ splash_thread.start()
 # Give splash window time to initialize
 time.sleep(0.5)
 
+# Update initial status
+update_splash_message("Working on: Loading ETF ticker list...")
+
 # --- Play startup audio notification ---
 try:
     print("🔊 Playing startup audio notification...")
@@ -1136,7 +1160,7 @@ def append_missing_schwab_data(historical_file, tickers, max_ticks=500):
         return hist_df
     
 # At startup, after loading tickers:
-update_splash_message("Loading historical data...\nThis may take a moment...")
+update_splash_message("Working on: Gathering historical market data from Schwab...")
 historical_data = append_missing_schwab_data(HISTORICAL_DATA_FILE, all_candidate_tickers, max_ticks=500)  # Increased for better AI analysis
 # diagnostic prints
 df = pd.read_csv("historical_data.csv")
@@ -1250,6 +1274,7 @@ except Exception as e:
     print(f"Warning: could not remove existing historical file: {e}")
 
 print(f"{HISTORICAL_DATA_FILE} will be rebuilt now to ensure {500} ticks per ticker")
+update_splash_message("Working on: Building comprehensive market history...")
 build_fresh_schwab_history_file(all_candidate_tickers, filename=HISTORICAL_DATA_FILE, max_ticks=500)
 
 # NOTE: AI recommendations will be called after ticker selection is complete   
@@ -1817,208 +1842,178 @@ initialize_alert_system()
 
 def check_trade_alerts(historical_data, top5_tickers=None):
     """
-    IMPROVED: Realistic alert system integrated with AI and technical rankings.
-    Triggers alerts based on:
-    1. AI probability thresholds (from get_trade_recommendations)
-    2. Composite technical ranking (from dashboard_ranks) 
-    3. Meaningful technical signals only
-    4. Weighted alert scoring system
-    Only processes tickers in top5_tickers if provided.
+    IMPROVED: AI-driven alert system with direct signal classification integration.
+    Triggers audio alerts based on:
+    1. AI signal classification (STRONG_LONG, LONG, SHORT, STRONG_SHORT)
+    2. Signal strength and direction from AI recommendations
+    3. Top 5 ranked tickers only (highest quality signals)
+    
+    Audio alerts triggered for:
+    - STRONG_LONG (🟢🟢): "strongbuy.mp3" + ticker name
+    - LONG (🟢): "mediumbuy.mp3" + ticker name  
+    - SHORT/STRONG_SHORT (🔴/🔴🔴): "exit.mp3" + ticker name
     """
     global _last_alert_times, dashboard_ranks, ai_recommendations
     alert_summary = []
 
-    # Get current AI recommendations for correlation
+    # Get current AI recommendations with new signal classification
     try:
         current_ai_recs = get_trade_recommendations(top5_tickers or tickers, return_df=True)
+        print(f"🔍 AI returned {len(current_ai_recs)} recommendations for alert checking")
     except Exception as e:
         print(f"⚠️ Could not get AI recommendations for alerts: {e}")
         current_ai_recs = pd.DataFrame()
+        return []
 
-    print(f"🔍 Checking alerts for {len(top5_tickers or tickers)} tickers...")
+    if current_ai_recs.empty:
+        print("⚠️ No AI recommendations available for alerts")
+        return []
+
+    # Process only top 5 AI recommendations (highest quality)
+    top5_ai = current_ai_recs.head(5)
+    
+    print(f"\n🔊 CHECKING AUDIO ALERTS FOR TOP 5 AI RECOMMENDATIONS:")
+    print("="*70)
     
     historical_data = historical_data.sort_values(["Ticker", "Datetime"])
-    for ticker, group in historical_data.groupby("Ticker"):
-        if top5_tickers is not None and ticker not in top5_tickers:
+    for idx, ai_rec in top5_ai.iterrows():
+        ticker = ai_rec.get('ticker', '')
+        signal_type = ai_rec.get('signal_type', 'NEUTRAL')
+        signal_strength = ai_rec.get('signal_strength', '🟡')
+        direction = ai_rec.get('direction', 'WAIT')
+        probability = ai_rec.get('probability', 0.5)
+        entry_price = ai_rec.get('entry_price', 0)
+        target = ai_rec.get('target', 0)
+        stop = ai_rec.get('stop', 0)
+        
+        # Get current price from historical data
+        ticker_data = historical_data[historical_data["Ticker"] == ticker]
+        if ticker_data.empty:
             continue
             
-        group = group.reset_index(drop=True)
-        if len(group) < 2:
-            continue
-            
-        prev, curr = group.iloc[-2], group.iloc[-1]
-        dt_str = str(curr["Datetime"])
+        current_row = ticker_data.iloc[-1]
+        current_price = current_row.get("Close", entry_price)
+        current_time = str(current_row.get("Datetime", ""))
         
-        # Initialize signal scoring system
-        signal_score = 0
-        bullish_signals = []
-        bearish_signals = []
-        
-        # Helper to avoid duplicate alerts
+        # Helper to avoid duplicate alerts (one alert per ticker per minute)
         def should_alert(event):
             key = (ticker, event)
-            now_minute = dt_str
+            now_minute = current_time[:16]  # YYYY-MM-DD HH:MM
             if _last_alert_times.get(key) == now_minute:
                 return False
             _last_alert_times[key] = now_minute
             return True
 
-        # --- 1. AI RECOMMENDATION INTEGRATION (40% weight) ---
-        ai_rec = current_ai_recs[current_ai_recs['ticker'] == ticker] if not current_ai_recs.empty else pd.DataFrame()
-        if not ai_rec.empty:
-            ai_prob = ai_rec.iloc[0].get('probability', 0.5)
-            ai_recommendation = ai_rec.iloc[0].get('recommendation', '')
-            
-            if "BUY:" in ai_recommendation and ai_prob >= 0.70:
-                signal_score += 4.0  # Strong AI signal
-                bullish_signals.append(f"AI-Strong({ai_prob:.1%})")
-            elif "BUY:" in ai_recommendation and ai_prob >= 0.60:
-                signal_score += 2.5  # Moderate AI signal
-                bullish_signals.append(f"AI-Mod({ai_prob:.1%})")
-            elif ai_prob <= 0.40:
-                signal_score -= 2.0  # Bearish AI signal
-                bearish_signals.append(f"AI-Bear({ai_prob:.1%})")
-
-        # --- 2. TECHNICAL RANKING INTEGRATION (25% weight) ---
-        tech_rank = dashboard_ranks.get(ticker, 3.0)  # Default to neutral
-        if tech_rank >= 4.5:
-            signal_score += 2.5  # Excellent technical rank
-            bullish_signals.append(f"Tech-Excellent({tech_rank:.1f})")
-        elif tech_rank >= 4.0:
-            signal_score += 1.5  # Good technical rank
-            bullish_signals.append(f"Tech-Good({tech_rank:.1f})")
-        elif tech_rank <= 2.0:
-            signal_score -= 1.5  # Poor technical rank
-            bearish_signals.append(f"Tech-Poor({tech_rank:.1f})")
-
-        # --- 3. KEY TECHNICAL SIGNALS (25% weight) ---
-        tech_cols = ["ADX", "+DI", "-DI", "PMO", "PMO_signal", "CCI"]
-        if all(col in group.columns for col in tech_cols):
-            # ADX momentum breakout (quality signal)
-            if (prev["ADX"] < 25 and curr["ADX"] >= 25 and 
-                curr["+DI"] > curr["-DI"] and should_alert("ADX_Breakout")):
-                signal_score += 2.0
-                bullish_signals.append("ADX-Breakout")
-                print(f"🚀 {ticker}: ADX momentum breakout ({curr['ADX']:.1f})")
-                
-            # PMO bullish crossover with confirmation
-            if (prev["PMO"] < prev["PMO_signal"] and curr["PMO"] > curr["PMO_signal"] and
-                curr["PMO"] > -2.0 and should_alert("PMO_Bullish")):  # Avoid oversold bounces
-                signal_score += 1.5
-                bullish_signals.append("PMO-Bull")
-                print(f"📈 {ticker}: PMO bullish crossover")
-                
-            # PMO bearish crossover 
-            if (prev["PMO"] > prev["PMO_signal"] and curr["PMO"] < curr["PMO_signal"] and
-                should_alert("PMO_Bearish")):
-                signal_score -= 1.5
-                bearish_signals.append("PMO-Bear")
-                print(f"📉 {ticker}: PMO bearish crossover")
-                
-            # Directional Movement reversal
-            if (prev["+DI"] < prev["-DI"] and curr["+DI"] > curr["-DI"] and
-                curr["ADX"] > 20 and should_alert("DI_Bullish")):
-                signal_score += 1.0
-                bullish_signals.append("DI-Bull")
-                
-            if (prev["+DI"] > prev["-DI"] and curr["+DI"] < curr["-DI"] and
-                curr["ADX"] > 20 and should_alert("DI_Bearish")):
-                signal_score -= 1.0
-                bearish_signals.append("DI-Bear")
-                
-            # CCI extreme reversal (only from extreme levels)
-            if (prev["CCI"] < -200 and curr["CCI"] > -150 and should_alert("CCI_Oversold_Recovery")):
-                signal_score += 1.0
-                bullish_signals.append("CCI-Recovery")
-            elif (prev["CCI"] > 200 and curr["CCI"] < 150 and should_alert("CCI_Overbought_Decline")):
-                signal_score -= 1.0
-                bearish_signals.append("CCI-Decline")
-
-        # --- 4. NEWS & WHALE SENTIMENT (10% weight) ---
-        # Only count recent, high-impact news
-        news_list = fetch_etf_news(ticker)
-        for article in news_list[:2]:  # Only top 2 recent articles
-            if isinstance(article, dict):
-                sentiment = article.get("sentiment", "Neutral")
-                title = article.get("title", "")
-                if sentiment == "Positive" and not _last_alert_times.get((ticker, "News+", title)):
-                    signal_score += 0.5
-                    bullish_signals.append("News+")
-                    _last_alert_times[(ticker, "News+", title)] = True
-                elif sentiment == "Negative" and not _last_alert_times.get((ticker, "News-", title)):
-                    signal_score -= 0.5
-                    bearish_signals.append("News-")
-                    _last_alert_times[(ticker, "News-", title)] = True
-
-        # Whale activity (simplified - only major moves)
-        whale_data = fetch_whale_data(ticker)
-        for entry in whale_data.get("insider", [])[:1]:  # Only most recent insider trade
-            tx_type = entry.get("transactionType", "").lower()
-            if tx_type == "buy" and _last_alert_times.get((ticker, "Whale+")) != dt_str:
-                signal_score += 0.5
-                bullish_signals.append("Insider+")
-                _last_alert_times[(ticker, "Whale+")] = dt_str
-            elif tx_type == "sell" and _last_alert_times.get((ticker, "Whale-")) != dt_str:
-                signal_score -= 0.5
-                bearish_signals.append("Insider-")
-                _last_alert_times[(ticker, "Whale-")] = dt_str
-
-        # --- 5. GENERATE REALISTIC ALERTS ---
-        current_price = curr.get("Close", 0)
+        # --- TRIGGER ALERTS BASED ON AI SIGNAL CLASSIFICATION ---
         
-        # STRONG BUY: High signal score + AI confirmation + good technicals
-        if (signal_score >= 6.0 and tech_rank >= 4.0 and 
-            any("AI-Strong" in s for s in bullish_signals) and
-            _last_alert_times.get((ticker, "StrongBuy")) != dt_str):
+        # 🟢🟢 STRONG LONG - Highest confidence buy signal
+        if signal_type == "STRONG_LONG" and should_alert("StrongBuy"):
+            print(f"\n🔥🔥 STRONG BUY ALERT: {ticker}")
+            print(f"   Signal: {signal_strength} {signal_type}")
+            print(f"   Direction: {direction}")
+            print(f"   Probability: {probability:.1%}")
+            print(f"   Current Price: ${current_price:.2f}")
+            print(f"   AI Entry: ${entry_price:.2f}")
+            print(f"   AI Target: ${target:.2f} ({((target/entry_price-1)*100):.1f}% gain)")
+            print(f"   AI Stop: ${stop:.2f} ({((stop/entry_price-1)*100):.1f}% loss)")
+            print(f"   📣 Audio: Playing strongbuy.mp3 + TTS for {ticker}")
             
-            print(f"🔥 STRONG BUY ALERT: {ticker} @ ${current_price:.2f}")
-            print(f"   Signal Score: {signal_score:.1f} | Tech Rank: {tech_rank:.1f}")
-            print(f"   Bullish Signals: {', '.join(bullish_signals)}")
-            play_audio("strongbuy.mp3", ticker, f"STRONG BUY signal for {ticker} with {signal_score:.1f} points")
-            _last_alert_times[(ticker, "StrongBuy")] = dt_str
+            # Play audio with ticker name
+            play_audio(
+                "strongbuy.mp3", 
+                ticker=ticker,
+                message=f"Strong buy signal. Entry at ${entry_price:.2f}, target ${target:.2f}",
+                tts=True
+            )
             
-        # MEDIUM BUY: Moderate signal score with some confirmation
-        elif (signal_score >= 4.0 and tech_rank >= 3.0 and
-              (any("AI-" in s for s in bullish_signals) or len(bullish_signals) >= 3) and
-              _last_alert_times.get((ticker, "MediumBuy")) != dt_str):
+        # 🟢 LONG - Good buy signal
+        elif signal_type == "LONG" and should_alert("MediumBuy"):
+            print(f"\n📈 BUY ALERT: {ticker}")
+            print(f"   Signal: {signal_strength} {signal_type}")
+            print(f"   Direction: {direction}")
+            print(f"   Probability: {probability:.1%}")
+            print(f"   Current Price: ${current_price:.2f}")
+            print(f"   AI Entry: ${entry_price:.2f}")
+            print(f"   AI Target: ${target:.2f} ({((target/entry_price-1)*100):.1f}% gain)")
+            print(f"   AI Stop: ${stop:.2f} ({((stop/entry_price-1)*100):.1f}% loss)")
+            print(f"   � Audio: Playing mediumbuy.mp3 + TTS for {ticker}")
             
-            print(f"📈 MEDIUM BUY ALERT: {ticker} @ ${current_price:.2f}")
-            print(f"   Signal Score: {signal_score:.1f} | Tech Rank: {tech_rank:.1f}")
-            print(f"   Bullish Signals: {', '.join(bullish_signals)}")
-            play_audio("mediumbuy.mp3", ticker, f"MODERATE BUY signal for {ticker}")
-            _last_alert_times[(ticker, "MediumBuy")] = dt_str
+            # Play audio with ticker name
+            play_audio(
+                "mediumbuy.mp3",
+                ticker=ticker,
+                message=f"Buy signal. Entry at ${entry_price:.2f}, target ${target:.2f}",
+                tts=True
+            )
             
-        # EXIT/SELL: Strong bearish signal score or AI bearish + technical breakdown
-        elif (signal_score <= -3.0 or 
-              (signal_score <= -2.0 and tech_rank <= 2.5) and
-              _last_alert_times.get((ticker, "Exit")) != dt_str):
+        # 🔴 SHORT - Bearish signal (avoid or short)
+        elif signal_type == "SHORT" and should_alert("Exit"):
+            print(f"\n⚠️ SHORT SIGNAL (AVOID/SHORT): {ticker}")
+            print(f"   Signal: {signal_strength} {signal_type}")
+            print(f"   Direction: {direction}")
+            print(f"   Probability Down: {(1-probability):.1%}")
+            print(f"   Current Price: ${current_price:.2f}")
+            print(f"   AI Entry: ${entry_price:.2f}")
+            print(f"   AI Target: ${target:.2f} (short target)")
+            print(f"   AI Stop: ${stop:.2f} (short stop)")
+            print(f"   📣 Audio: Playing exit.mp3 + TTS for {ticker}")
             
-            print(f"🚨 EXIT ALERT: {ticker} @ ${current_price:.2f}")
-            print(f"   Signal Score: {signal_score:.1f} | Tech Rank: {tech_rank:.1f}")
-            print(f"   Bearish Signals: {', '.join(bearish_signals)}")
-            play_audio("exit.mp3", ticker, f"EXIT SELL signal for {ticker} - SELL NOW")
-            _last_alert_times[(ticker, "Exit")] = dt_str
+            # Play audio with ticker name
+            play_audio(
+                "exit.mp3",
+                ticker=ticker,
+                message=f"Bearish signal. Avoid buying or consider shorting at ${entry_price:.2f}",
+                tts=True
+            )
+            
+        # 🔴🔴 STRONG SHORT - Strong downtrend
+        elif signal_type == "STRONG_SHORT" and should_alert("StrongExit"):
+            print(f"\n🚨� STRONG SHORT SIGNAL: {ticker}")
+            print(f"   Signal: {signal_strength} {signal_type}")
+            print(f"   Direction: {direction}")
+            print(f"   Probability Down: {(1-probability):.1%}")
+            print(f"   Current Price: ${current_price:.2f}")
+            print(f"   AI Entry: ${entry_price:.2f}")
+            print(f"   AI Target: ${target:.2f} (short target)")
+            print(f"   AI Stop: ${stop:.2f} (short stop)")
+            print(f"   📣 Audio: Playing exit.mp3 + TTS for {ticker}")
+            
+            # Play audio with ticker name
+            play_audio(
+                "exit.mp3",
+                ticker=ticker,
+                message=f"Strong bearish signal. Strong short opportunity or avoid completely at ${entry_price:.2f}",
+                tts=True
+            )
 
         # Store summary for analysis
         alert_summary.append({
             "ticker": ticker,
-            "signal_score": signal_score,
-            "tech_rank": tech_rank,
-            "bullish_signals": bullish_signals,
-            "bearish_signals": bearish_signals,
-            "ai_probability": ai_rec.iloc[0].get('probability', 0.5) if not ai_rec.empty else 0.5
+            "signal_type": signal_type,
+            "signal_strength": signal_strength,
+            "direction": direction,
+            "probability": probability,
+            "entry_price": entry_price,
+            "target": target,
+            "stop": stop,
+            "current_price": current_price
         })
 
     # Summary stats
-    total_analyzed = len(alert_summary)
-    strong_signals = len([a for a in alert_summary if a["signal_score"] >= 6.0])
-    moderate_signals = len([a for a in alert_summary if 4.0 <= a["signal_score"] < 6.0])
-    weak_signals = len([a for a in alert_summary if a["signal_score"] <= -3.0])
+    print(f"\n{'='*70}")
+    print(f"📊 ALERT SUMMARY: {len(alert_summary)} top tickers processed")
+    strong_long = len([a for a in alert_summary if a["signal_type"] == "STRONG_LONG"])
+    long_signals = len([a for a in alert_summary if a["signal_type"] == "LONG"])
+    neutral = len([a for a in alert_summary if a["signal_type"] == "NEUTRAL"])
+    short_signals = len([a for a in alert_summary if a["signal_type"] == "SHORT"])
+    strong_short = len([a for a in alert_summary if a["signal_type"] == "STRONG_SHORT"])
     
-    print(f"\n📊 ALERT SUMMARY: {total_analyzed} tickers analyzed")
-    print(f"   Strong buy signals: {strong_signals}")
-    print(f"   Moderate buy signals: {moderate_signals}")  
-    print(f"   Exit signals: {weak_signals}")
+    print(f"   🟢🟢 Strong Long: {strong_long}")
+    print(f"   🟢   Long:        {long_signals}")
+    print(f"   🟡   Neutral:     {neutral}")
+    print(f"   🔴   Short:       {short_signals}")
+    print(f"   🔴🔴 Strong Short: {strong_short}")
+    print(f"{'='*70}\n")
     
     return alert_summary
 
@@ -2126,40 +2121,141 @@ def make_ai_recommendations_table(top5_ai):
     import datetime
     if top5_ai is None or top5_ai.empty:
         return html.Div("No AI recommendations available.", style={'fontSize': '14px'})
+    
     # Add a "Time" column if not present
     if "time" not in top5_ai.columns:
         now_str = datetime.datetime.now().strftime("%H:%M:%S")
         top5_ai = top5_ai.copy()
         top5_ai["time"] = now_str
+    
+    # Helper function to get row background color based on signal type
+    def get_row_color(signal_type):
+        colors = {
+            "STRONG_LONG": "#d4edda",      # Light green
+            "LONG": "#e8f5e9",              # Pale green
+            "NEUTRAL": "#fff9c4",           # Light yellow
+            "SHORT": "#ffe0b2",             # Light orange
+            "STRONG_SHORT": "#ffcdd2",      # Light red
+            "NO_TRADE_LOW_VOL": "#f5f5f5"  # Light gray
+        }
+        return colors.get(signal_type, "#ffffff")
+    
     return html.Table([
         html.Thead(html.Tr([
-            html.Th("Ticker", style={'textAlign': 'left', 'width': '8%', 'padding': '8px 5px'}),
-            html.Th("Probability Up", style={'textAlign': 'left', 'width': '12%', 'padding': '8px 5px'}),
-            html.Th("Entry", style={'textAlign': 'left', 'width': '8%', 'padding': '8px 5px'}),
-            html.Th("Target", style={'textAlign': 'left', 'width': '8%', 'padding': '8px 5px'}),
-            html.Th("Stop", style={'textAlign': 'left', 'width': '8%', 'padding': '8px 5px'}),
-            html.Th("Recommendation", style={'textAlign': 'left', 'width': '46%', 'padding': '8px 5px'}),
-            html.Th("Time", style={'textAlign': 'left', 'width': '10%', 'padding': '8px 5px'})
-        ])),
+            html.Th("Signal", style={'textAlign': 'center', 'width': '6%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Ticker", style={'textAlign': 'left', 'width': '7%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Direction", style={'textAlign': 'center', 'width': '8%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Prob", style={'textAlign': 'center', 'width': '7%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Entry", style={'textAlign': 'right', 'width': '7%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Target", style={'textAlign': 'right', 'width': '7%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Stop", style={'textAlign': 'right', 'width': '7%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Recommendation", style={'textAlign': 'left', 'width': '42%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'}),
+            html.Th("Time", style={'textAlign': 'center', 'width': '9%', 'padding': '8px 5px', 'borderBottom': '2px solid #ddd'})
+        ], style={'backgroundColor': '#f8f9fa'})),
         html.Tbody([
             html.Tr([
-                html.Td(row["ticker"], style={'textAlign': 'left', 'width': '8%', 'padding': '6px 5px', 'fontWeight': 'bold'}),
-                html.Td(f"{row['probability']:.2%}", style={'textAlign': 'left', 'width': '12%', 'padding': '6px 5px'}),
-                html.Td(f"{row['entry']:.2f}", style={'textAlign': 'left', 'width': '8%', 'padding': '6px 5px'}),
-                html.Td(f"{row['target']:.2f}", style={'textAlign': 'left', 'width': '8%', 'padding': '6px 5px'}),
-                html.Td(f"{row['stop']:.2f}", style={'textAlign': 'left', 'width': '8%', 'padding': '6px 5px'}),
-                html.Td([
-                    # Add visual indicator based on recommendation type
-                    html.Span(
-                        "🔥 " if "TRADE:" in row["recommendation"] else "❌ ",
-                        style={'fontWeight': 'bold', 'marginRight': '5px'}
-                    ),
-                    html.Span(row["recommendation"])
-                ], style={'textAlign': 'left', 'width': '46%', 'padding': '6px 5px'}),
-                html.Td(row["time"], style={'textAlign': 'left', 'width': '10%', 'padding': '6px 5px'})
-            ]) for _, row in top5_ai.iterrows()
+                html.Td(
+                    row.get("signal_strength", "❓"), 
+                    style={
+                        'textAlign': 'center', 
+                        'width': '6%', 
+                        'padding': '8px 5px', 
+                        'fontSize': '18px',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    row["ticker"], 
+                    style={
+                        'textAlign': 'left', 
+                        'width': '7%', 
+                        'padding': '8px 5px', 
+                        'fontWeight': 'bold',
+                        'fontSize': '14px',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    row.get("direction", "---"), 
+                    style={
+                        'textAlign': 'center', 
+                        'width': '8%', 
+                        'padding': '8px 5px',
+                        'fontWeight': 'bold',
+                        'color': '#2ecc40' if row.get("direction") == "LONG" else ('#ff4136' if row.get("direction") == "SHORT" else '#999'),
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    f"{row['probability']:.1%}", 
+                    style={
+                        'textAlign': 'center', 
+                        'width': '7%', 
+                        'padding': '8px 5px',
+                        'fontWeight': 'bold',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    f"${row['entry']:.2f}" if row['entry'] else "---", 
+                    style={
+                        'textAlign': 'right', 
+                        'width': '7%', 
+                        'padding': '8px 5px',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    f"${row['target']:.2f}" if row['target'] else "---", 
+                    style={
+                        'textAlign': 'right', 
+                        'width': '7%', 
+                        'padding': '8px 5px',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    f"${row['stop']:.2f}" if row['stop'] else "---", 
+                    style={
+                        'textAlign': 'right', 
+                        'width': '7%', 
+                        'padding': '8px 5px',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    row["recommendation"], 
+                    style={
+                        'textAlign': 'left', 
+                        'width': '42%', 
+                        'padding': '8px 5px',
+                        'fontSize': '13px',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                ),
+                html.Td(
+                    row["time"], 
+                    style={
+                        'textAlign': 'center', 
+                        'width': '9%', 
+                        'padding': '8px 5px',
+                        'fontSize': '12px',
+                        'color': '#666',
+                        'borderBottom': '1px solid #e0e0e0'
+                    }
+                )
+            ], style={'backgroundColor': get_row_color(row.get("signal_type", ""))}) 
+            for _, row in top5_ai.iterrows()
         ])
-    ], style={'width': '100%', 'fontSize': '14px', 'marginBottom': '15px', 'borderCollapse': 'collapse', 'border': '1px solid #ddd'})
+    ], style={
+        'width': '100%', 
+        'fontSize': '14px', 
+        'marginBottom': '20px', 
+        'marginTop': '10px',
+        'borderCollapse': 'collapse', 
+        'border': '2px solid #ddd',
+        'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
+    })
 
 
 def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
@@ -2173,21 +2269,6 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
     from datetime import datetime
     from ai_module import get_trade_recommendations
     from etrade_auth import fetch_etrade_market_data
-
-    # --- DESTROY SPLASH POPUP ON FIRST DASHBOARD DISPLAY ---
-    destroy_splash()
-
-    # --- Play dashboard ready audio (MP3) ---
-    try:
-        audio_file_path = "C:/Users/mjmat/Pythons_Code_Files/dashboard_ready.mp3"
-        if os.path.exists(audio_file_path):
-            data, samplerate = sf.read(audio_file_path)
-            sd.play(data, samplerate)
-            sd.wait()
-        else:
-            print(f"Audio file {audio_file_path} not found.")
-    except Exception as e:
-        print(f"Error playing dashboard ready audio: {e}")
 
     # --- Load Quiver government and institutional data ---
     def load_quiver_cache(cache_path):
@@ -2339,14 +2420,20 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
         import math
         score = consensus.get("score", 0)
         summary = consensus.get("summary", "")
-        print(f"📊 [GAUGE] Creating gauge with score={score}, summary='{summary}'")
-        max_score = 8  # 16 tickers, -8 to +8
-        angle = 180 * (score + max_score) / (2 * max_score)  # 0=left, 180=right
+        max_score = consensus.get("max_score", 20)  # Dynamic max score from consensus data
+        
+        print(f"📊 [GAUGE] Creating gauge with score={score}/{max_score}, summary='{summary}'")
+        
+        # Adjusted thresholds based on new scoring system (max ~24)
+        # Strong bullish: >6, Bullish: >3, Neutral: -3 to 3, Bearish: <-3, Strong bearish: <-6
         color = (
-            "#2ecc40" if score > 4 else
-            "#ffe066" if -4 <= score <= 4 else
-            "#ff4136"
+            "#2ecc40" if score > 6 else      # Strong bullish - bright green
+            "#7fdb7f" if score > 3 else      # Bullish - light green
+            "#ffe066" if -3 <= score <= 3 else  # Neutral - yellow
+            "#ff8566" if score > -6 else     # Bearish - light red
+            "#ff4136"                        # Strong bearish - bright red
         )
+        
         # Use Plotly for a gauge-like chart
         import plotly.graph_objs as go
         fig = go.Figure(go.Indicator(
@@ -2357,9 +2444,11 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 "axis": {"range": [-max_score, max_score]},
                 "bar": {"color": color},
                 "steps": [
-                    {"range": [-max_score, -4], "color": "#ff4136"},
-                    {"range": [-4, 4], "color": "#ffe066"},
-                    {"range": [4, max_score], "color": "#2ecc40"}
+                    {"range": [-max_score, -6], "color": "#ff4136"},      # Strong bearish
+                    {"range": [-6, -3], "color": "#ff8566"},              # Bearish
+                    {"range": [-3, 3], "color": "#ffe066"},               # Neutral
+                    {"range": [3, 6], "color": "#7fdb7f"},                # Bullish
+                    {"range": [6, max_score], "color": "#2ecc40"}         # Strong bullish
                 ],
                 "threshold": {
                     "line": {"color": "black", "width": 4},
@@ -2382,11 +2471,28 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
         return dcc.Graph(figure=fig, id="consensus-gauge")
 
     # Run consensus collector at startup
+    update_splash_message("Working on: Generating market consensus report...")
     run_consensus_collector()
     consensus = read_consensus_cache()
     print(f"📊 [STARTUP] Consensus data loaded for dashboard:")
     print(f"   📈 STARTUP SCORE: {consensus.get('score', 'N/A')} (Should show in gauge!)")
     print(f"   📝 STARTUP SUMMARY: {consensus.get('summary', 'N/A')}")
+
+    # --- DESTROY SPLASH POPUP AFTER CONSENSUS REPORT COMPLETES ---
+    destroy_splash()
+
+    # --- Play dashboard ready audio (MP3) ---
+    try:
+        audio_file_path = "C:/Users/mjmat/Pythons_Code_Files/dashboard_ready.mp3"
+        if os.path.exists(audio_file_path):
+            data, samplerate = sf.read(audio_file_path)
+            sd.play(data, samplerate)
+            sd.wait()
+            print("✅ Dashboard ready audio played successfully")
+        else:
+            print(f"⚠️ Audio file {audio_file_path} not found.")
+    except Exception as e:
+        print(f"⚠️ Error playing dashboard ready audio: {e}")
 
     app.layout = html.Div([
         html.Div(id='ai-recommendations-table-container'),
@@ -2402,6 +2508,31 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                         'marginLeft': '244px',  # Moved right ~2" (100px + 144px)
                         'marginTop': '28px',    # Moved down ~1/4" (10px + 18px)
                         'width': '380px',       # Increased from 340px to 380px for larger gauge
+                        'textAlign': 'center'
+                    }),
+            # Countdown timer positioned next to consensus gauge
+            html.Div(id='countdown-timer-container',
+                    children=[
+                        html.Div([
+                            html.H4("Next Update In:", style={'margin': '0 0 5px 0', 'fontSize': '14px', 'color': '#555'}),
+                            html.H2(id='countdown-display', 
+                                   children="--:--",
+                                   style={'margin': '0', 'fontSize': '32px', 'fontWeight': 'bold', 'color': '#3572b0'}),
+                            html.P(id='last-update-time',
+                                  children="Last update: --:--:--",
+                                  style={'margin': '5px 0 0 0', 'fontSize': '11px', 'color': '#888'})
+                        ], style={'textAlign': 'center'})
+                    ],
+                    style={
+                        'display': 'inline-block',
+                        'marginLeft': '20px',
+                        'marginTop': '58px',
+                        'padding': '15px 20px',
+                        'backgroundColor': '#f8f9fa',
+                        'border': '2px solid #dee2e6',
+                        'borderRadius': '8px',
+                        'boxShadow': '0 2px 4px rgba(0,0,0,0.1)',
+                        'minWidth': '180px',
                         'textAlign': 'center'
                     })
         ], style={'display': 'flex', 'alignItems': 'flex-start', 'marginBottom': '10px'}),
@@ -2565,6 +2696,14 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             n_intervals=0,
             max_intervals=1  # Only fire once
         ),
+        # Add countdown timer interval that updates every second
+        dcc.Interval(
+            id='countdown-interval',
+            interval=1000,  # Update every 1 second for countdown
+            n_intervals=0
+        ),
+        # Store to track last update time
+        dcc.Store(id='last-update-timestamp', data=datetime.now().timestamp()),
     ])
     @app.callback(
         Output('dummy-div', 'children'),  # <-- use dummy-div, not ai-recommendations-table-container
@@ -2577,6 +2716,62 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             subprocess.Popen([sys.executable, "day_settings_gui.py"])
         return dash.no_update
     
+    # Countdown timer callback - updates every second
+    @app.callback(
+        [Output('countdown-display', 'children'),
+         Output('last-update-time', 'children'),
+         Output('last-update-timestamp', 'data')],
+        [Input('countdown-interval', 'n_intervals'),
+         Input('interval-component', 'n_intervals')],
+        [State('last-update-timestamp', 'data')],
+        prevent_initial_call=False
+    )
+    def update_countdown_timer(countdown_n, interval_n, last_update_ts):
+        """
+        Updates the countdown timer every second.
+        Resets when the main interval component triggers an update.
+        """
+        from dash import callback_context
+        
+        # Get current interval setting
+        current_interval_minutes = get_current_interval()
+        
+        # Check if this was triggered by the main interval update (data refresh)
+        if callback_context.triggered:
+            trigger_id = callback_context.triggered[0]['prop_id'].split('.')[0]
+            if trigger_id == 'interval-component' and interval_n > 0:
+                # Main update just happened, reset timer
+                new_timestamp = datetime.now().timestamp()
+                last_update_str = datetime.now().strftime("%I:%M:%S %p")
+                countdown_display = f"{current_interval_minutes}:00"
+                return countdown_display, f"Last update: {last_update_str}", new_timestamp
+        
+        # Calculate time remaining until next update
+        if last_update_ts is None:
+            last_update_ts = datetime.now().timestamp()
+        
+        current_time = datetime.now().timestamp()
+        elapsed_seconds = int(current_time - last_update_ts)
+        total_seconds = current_interval_minutes * 60
+        remaining_seconds = max(0, total_seconds - elapsed_seconds)
+        
+        # Format countdown as MM:SS
+        minutes_left = remaining_seconds // 60
+        seconds_left = remaining_seconds % 60
+        countdown_display = f"{minutes_left}:{seconds_left:02d}"
+        
+        # Format last update time
+        last_update_dt = datetime.fromtimestamp(last_update_ts)
+        last_update_str = last_update_dt.strftime("%I:%M:%S %p")
+        
+        # Change color to orange when less than 30 seconds remain
+        if remaining_seconds <= 30 and remaining_seconds > 0:
+            countdown_display = f"🔶 {countdown_display}"
+        elif remaining_seconds == 0:
+            countdown_display = "⏱️ Updating..."
+        
+        return countdown_display, f"Last update: {last_update_str}", last_update_ts
+
 
     @app.callback(
         Output('ai-recommendations-table-container', 'children'),
@@ -2747,7 +2942,8 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             Input('adx-chart-height', 'value'),
             Input('adx-tick-count', 'value'),
             Input('pmo-chart-height', 'value'),
-            Input('pmo-tick-count', 'value')
+            Input('pmo-tick-count', 'value'),
+            Input('interval-store', 'data')  # ADD: Get dashboard interval setting
         ],
         prevent_initial_call=False
     )
@@ -2755,8 +2951,10 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                     price_chart_height, price_tick_count,
                     volume_chart_height, volume_tick_count,
                     adx_chart_height, adx_tick_count,
-                    pmo_chart_height, pmo_tick_count):
+                    pmo_chart_height, pmo_tick_count,
+                    dashboard_interval):  # ADD: Dashboard interval parameter
         print(f"📊 [CHARTS] Updating dashboard (interval: {n}, startup: {startup_n}, tickers: {selected_tickers})")
+        print(f"⏱️ [INTERVAL] Dashboard interval setting: {dashboard_interval} minute(s)")
         if startup_n > 0:
             print("🚀 [STARTUP] Startup triggered chart refresh with latest data!")
        
@@ -2872,6 +3070,17 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             return go.Figure(), go.Figure(), go.Figure(), go.Figure(), html.Div("No tickers with data."), html.Div("No whale data.")
 
         df = df[df["Ticker"].isin(valid_ticker_rows)].copy()
+
+        # INTERVAL FIX: Aggregate data to match dashboard interval setting
+        # Default to dashboard_interval (e.g., 5 minutes), or 1 minute if not set
+        interval_minutes = dashboard_interval if dashboard_interval and dashboard_interval > 1 else 1
+        
+        if interval_minutes > 1:
+            print(f"📊 [AGGREGATION] Aggregating 1-minute data to {interval_minutes}-minute bars for charts")
+            df = aggregate_bars(df, interval_minutes=interval_minutes, selected_tickers=valid_ticker_rows)
+            print(f"📊 [AGGREGATION] After aggregation: {len(df)} rows")
+        else:
+            print(f"📊 [AGGREGATION] Using 1-minute data (no aggregation needed)")
 
         # Helper to get last N rows while preserving datetime for proper chronological order
         def get_last_n_with_datetime(df, ticker, n):
@@ -3086,6 +3295,11 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
 
         # Price chart
         try:
+            # CONSISTENCY FIX: Ensure minimum height per ticker for readable charts
+            # Height setting is now PER TICKER, not total. Min 250px per ticker for readability
+            min_height_per_ticker = 250
+            actual_price_height = max(price_chart_height, min_height_per_ticker)
+            
             price_fig = make_subplots(rows=num_tickers, cols=1, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=subplot_titles, row_heights=[1]*num_tickers)
             chart_success = False
             for i, ticker in enumerate(valid_ticker_rows, start=1):
@@ -3108,12 +3322,34 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                     if sell_signals:
                         price_fig.add_trace(go.Scatter(x=[s["Datetime"] for s in sell_signals], y=[s["Price"] for s in sell_signals], mode='markers', marker=dict(symbol='triangle-down', size=12, color='red', line=dict(width=2, color='darkred')), name=f"{ticker} Sell Signal", showlegend=False), row=i, col=1)
                 # Enhanced axis formatting for better space utilization in narrow charts
-                price_fig.update_xaxes(nticks=min(8, max(5, price_tick_count)), showgrid=True, gridcolor='rgba(128,128,128,0.2)', row=i, col=1)
+                # TICK DISPLAY FIX: Set x-axis to show full data range, not just cramped right edge
+                # RANGESLIDER FIX: Disable rangeslider for each subplot to prevent gray handles
+                if not ticker_df.empty and 'Datetime' in ticker_df.columns:
+                    x_min = ticker_df['Datetime'].min()
+                    x_max = ticker_df['Datetime'].max()
+                    price_fig.update_xaxes(
+                        range=[x_min, x_max],  # Show full data range
+                        nticks=min(8, max(5, price_tick_count)), 
+                        showgrid=True, 
+                        gridcolor='rgba(128,128,128,0.2)',
+                        rangeslider_visible=False,  # Disable rangeslider
+                        row=i, col=1
+                    )
+                else:
+                    price_fig.update_xaxes(
+                        nticks=min(8, max(5, price_tick_count)), 
+                        showgrid=True, 
+                        gridcolor='rgba(128,128,128,0.2)',
+                        rangeslider_visible=False,  # Disable rangeslider
+                        row=i, col=1
+                    )
                 price_fig.update_yaxes(showgrid=True, gridcolor='rgba(128,128,128,0.2)', nticks=8, row=i, col=1)
             
             # Enhanced layout with optimized margins for 33% width
+            # CONSISTENCY FIX: Total height = per-ticker height * number of tickers for consistent spacing
+            # RANGESLIDER FIX: Ensure rangeslider disabled globally
             price_fig.update_layout(
-                height=price_chart_height * num_tickers, 
+                height=actual_price_height * num_tickers, 
                 title="Price (Candlestick)", 
                 showlegend=False,
                 margin=dict(l=45, r=45, t=40, b=30),  # Fixed right margin to prevent cramping
@@ -3121,10 +3357,11 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 paper_bgcolor='white',
                 autosize=True,  # Enable responsive sizing
                 font=dict(size=9),  # Smaller font for narrow charts
-                title_font_size=10
+                title_font_size=10,
+                xaxis_rangeslider_visible=False  # Disable rangeslider globally
             )
             try:
-                price_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d')
+                price_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d', rangeslider_visible=False)
             except Exception:
                 pass
         except Exception as e:
@@ -3141,6 +3378,10 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             df['TickVolume'] = df['TickVolume'].clip(lower=0)
             return df
 
+        # CONSISTENCY FIX: Volume chart minimum height per ticker
+        min_height_per_ticker = 250
+        actual_volume_height = max(volume_chart_height, min_height_per_ticker)
+        
         volume_plot_df = calculate_tick_volume(volume_plot_df)
         volume_fig = make_subplots(rows=num_tickers, cols=1, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=[f"{ticker} Volume" for ticker in valid_ticker_rows], row_heights=[1]*num_tickers)
         for i, ticker in enumerate(valid_ticker_rows, start=1):
@@ -3164,12 +3405,34 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             if y_max and y_max > 0:
                 volume_fig.update_yaxes(range=[0, y_max], showgrid=True, gridcolor='rgba(128,128,128,0.2)', nticks=6, row=i, col=1)
             # Enhanced axis formatting for narrow charts
-            volume_fig.update_xaxes(nticks=min(8, max(5, volume_tick_count)), showgrid=True, gridcolor='rgba(128,128,128,0.2)', row=i, col=1)
+            # TICK DISPLAY FIX: Set x-axis to show full data range
+            # RANGESLIDER FIX: Disable rangeslider for volume charts
+            if not vol_df.empty and 'Datetime' in vol_df.columns:
+                x_min = vol_df['Datetime'].min()
+                x_max = vol_df['Datetime'].max()
+                volume_fig.update_xaxes(
+                    range=[x_min, x_max],  # Show full data range
+                    nticks=min(8, max(5, volume_tick_count)), 
+                    showgrid=True, 
+                    gridcolor='rgba(128,128,128,0.2)',
+                    rangeslider_visible=False,  # Disable rangeslider
+                    row=i, col=1
+                )
+            else:
+                volume_fig.update_xaxes(
+                    nticks=min(8, max(5, volume_tick_count)), 
+                    showgrid=True, 
+                    gridcolor='rgba(128,128,128,0.2)',
+                    rangeslider_visible=False,  # Disable rangeslider
+                    row=i, col=1
+                )
             
         # Enhanced layout for volume charts optimized for 33% width
+        # CONSISTENCY FIX: Total height = per-ticker height * number of tickers
+        # RANGESLIDER FIX: Ensure rangeslider disabled globally
         volume_fig.update_layout(
             title="Volume", 
-            height=volume_chart_height * num_tickers, 
+            height=actual_volume_height * num_tickers, 
             showlegend=False, 
             barmode='group',
             margin=dict(l=45, r=45, t=40, b=30),  # Fixed right margin to prevent cramping
@@ -3177,14 +3440,19 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
             paper_bgcolor='white',
             autosize=True,  # Enable responsive sizing
             font=dict(size=9),  # Smaller font for narrow charts
-            title_font_size=10
+            title_font_size=10,
+            xaxis_rangeslider_visible=False  # Disable rangeslider globally
         )
         try:
-            volume_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d')
+            volume_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d', rangeslider_visible=False)
         except Exception:
             pass
 
         # ADX chart
+        # CONSISTENCY FIX: ADX chart minimum height per ticker
+        min_height_per_ticker = 250
+        actual_adx_height = max(adx_chart_height, min_height_per_ticker)
+        
         print(f"📊 CHART DEBUG: Creating ADX chart for {num_tickers} tickers")
         adx_fig = make_subplots(rows=num_tickers, cols=1, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=[f"{ticker} ADX/DMS" for ticker in valid_ticker_rows], row_heights=[1]*num_tickers)
         traces_added = 0
@@ -3223,27 +3491,45 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                     max_val = max(adx_clean['ADX_y'].max(), adx_clean['+DI_y'].max(), adx_clean['-DI_y'].max())
                     min_val = min(adx_clean['ADX_y'].min(), adx_clean['+DI_y'].min(), adx_clean['-DI_y'].min())
                     # Enhanced axis formatting for better space utilization in narrow charts
-                    adx_fig.update_xaxes(nticks=min(8, max(5, adx_tick_count)), showgrid=True, gridcolor='rgba(128,128,128,0.2)', row=i, col=1)
+                    # TICK DISPLAY FIX: Set x-axis to show full data range
+                    # RANGESLIDER FIX: Disable rangeslider for ADX charts
+                    x_min = adx_clean['Datetime'].min()
+                    x_max = adx_clean['Datetime'].max()
+                    adx_fig.update_xaxes(
+                        range=[x_min, x_max],  # Show full data range
+                        nticks=min(8, max(5, adx_tick_count)), 
+                        showgrid=True, 
+                        gridcolor='rgba(128,128,128,0.2)',
+                        rangeslider_visible=False,  # Disable rangeslider
+                        row=i, col=1
+                    )
                     adx_fig.update_yaxes(range=[max(0, min_val - 2), min(100, max_val + 5)], showgrid=True, gridcolor='rgba(128,128,128,0.2)', dtick=20, nticks=6, row=i, col=1)
         
         # Enhanced layout for ADX charts optimized for 33% width
+        # CONSISTENCY FIX: Total height = per-ticker height * number of tickers
+        # RANGESLIDER FIX: Ensure rangeslider disabled globally
         adx_fig.update_layout(
             title='ADX / DMS Indicators', 
-            height=adx_chart_height * num_tickers, 
+            height=actual_adx_height * num_tickers, 
             showlegend=False, 
             margin=dict(l=45, r=45, t=40, b=30),  # Fixed right margin to prevent cramping
             plot_bgcolor='white',
             paper_bgcolor='white',
             autosize=True,  # Enable responsive sizing
             font=dict(size=9),  # Smaller font for narrow charts
-            title_font_size=10
+            title_font_size=10,
+            xaxis_rangeslider_visible=False  # Disable rangeslider globally
         )
         try:
-            adx_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d')
+            adx_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d', rangeslider_visible=False)
         except Exception:
             pass
 
         # PMO chart
+        # CONSISTENCY FIX: PMO chart minimum height per ticker
+        min_height_per_ticker = 250
+        actual_pmo_height = max(pmo_chart_height, min_height_per_ticker)
+        
         pmo_fig = make_subplots(rows=num_tickers, cols=1, shared_xaxes=True, vertical_spacing=0.05, subplot_titles=[f"{ticker} PMO" for ticker in valid_ticker_rows], row_heights=[1]*num_tickers)
         for i, ticker in enumerate(valid_ticker_rows, start=1):
             pmo_sub = filtered_pmo_df[filtered_pmo_df['Ticker'] == ticker]
@@ -3251,23 +3537,37 @@ def start_dashboard(historical_data, filtered_df, tickers, dashboard_ranks):
                 pmo_fig.add_trace(go.Scatter(x=pmo_sub['Datetime'], y=pmo_sub['PMO'], mode='lines', name=f"{ticker} PMO", line=dict(color='green', width=2)), row=i, col=1)
                 pmo_fig.add_trace(go.Scatter(x=pmo_sub['Datetime'], y=pmo_sub['PMO_signal'], mode='lines', name=f"{ticker} PMO Signal", line=dict(color='red', dash='dot', width=1.5)), row=i, col=1)
                 # Enhanced axis formatting for narrow charts
-                pmo_fig.update_xaxes(nticks=min(8, max(5, pmo_tick_count)), showgrid=True, gridcolor='rgba(128,128,128,0.2)', row=i, col=1)
+                # TICK DISPLAY FIX: Set x-axis to show full data range
+                # RANGESLIDER FIX: Disable rangeslider for PMO charts
+                x_min = pmo_sub['Datetime'].min()
+                x_max = pmo_sub['Datetime'].max()
+                pmo_fig.update_xaxes(
+                    range=[x_min, x_max],  # Show full data range
+                    nticks=min(8, max(5, pmo_tick_count)), 
+                    showgrid=True, 
+                    gridcolor='rgba(128,128,128,0.2)',
+                    rangeslider_visible=False,  # Disable rangeslider
+                    row=i, col=1
+                )
                 pmo_fig.update_yaxes(showgrid=True, gridcolor='rgba(128,128,128,0.2)', nticks=6, row=i, col=1)
                 
         # Enhanced layout for PMO charts optimized for 33% width  
+        # CONSISTENCY FIX: Total height = per-ticker height * number of tickers
+        # RANGESLIDER FIX: Ensure rangeslider disabled globally
         pmo_fig.update_layout(
             title='PMO & PMO Signal', 
-            height=pmo_chart_height * num_tickers, 
+            height=actual_pmo_height * num_tickers, 
             showlegend=False,
             margin=dict(l=45, r=45, t=40, b=30),  # Fixed right margin to prevent cramping
             plot_bgcolor='white',
             paper_bgcolor='white',
             autosize=True,  # Enable responsive sizing
             font=dict(size=9),  # Smaller font for narrow charts
-            title_font_size=10
+            title_font_size=10,
+            xaxis_rangeslider_visible=False  # Disable rangeslider globally
         )
         try:
-            pmo_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d')
+            pmo_fig.update_xaxes(type='date', tickformat='%H:%M\n%m-%d', rangeslider_visible=False)
         except Exception:
             pass
 
@@ -4069,6 +4369,7 @@ def select_trade_candidates():
 print(f"📊 STEP 1: Ensuring historical data for all {len(all_candidate_tickers)} candidate tickers...")
 
 # **CRITICAL: RUN DATA INTEGRITY CHECK BEFORE DASHBOARD STARTUP**
+update_splash_message("Working on: Verifying data integrity...")
 print("🔍 === RUNNING CRITICAL PRE-STARTUP DATA INTEGRITY CHECK ===")
 import threading
 try:
@@ -4149,6 +4450,7 @@ except Exception as e:
     print(f"⚠️ [STARTUP] Cleanup error: {e}, continuing with original data")
 
 # Calculate technical indicators for ALL candidates (needed for ranking)
+update_splash_message("Working on: Calculating technical indicators (ADX, PMO, CCI)...")
 print("📈 STEP 2: Calculating technical indicators for all candidates...")
 adx_df_full = calculate_adx_multi(hist_df_full, all_candidate_tickers, period=21)
 pmo_df_full = calculate_pmo_multi(hist_df_full, all_candidate_tickers)
@@ -4164,6 +4466,7 @@ historical_data = hist_df_full
 print(f"✅ Historical data updated with technical indicators for {len(all_candidate_tickers)} tickers")
 
 # STEP 3: Now run the selection process to pick top 5 from all candidates
+update_splash_message("Working on: Gathering whale data & news sentiment from Finnhub...")
 print("🎯 STEP 3: Running candidate selection to pick top 5...")
 try:
     top5_df = select_trade_candidates()
@@ -4196,6 +4499,7 @@ if len(tickers) > 5:
 print(f"🎯 FINAL DASHBOARD TICKERS: {tickers} (count: {len(tickers)})")
 
 # 💡 FETCH 52-WEEK DATA FOR NEW TICKERS IMMEDIATELY
+update_splash_message("Working on: Fetching 52-week high/low data from E*TRADE...")
 print("📊 Fetching 52-week high/low data for dashboard tickers...")
 try:
     global market_data_df
@@ -4214,6 +4518,7 @@ except Exception as e:
 
 #                                   ***** Call ai_module to get trade recommendations *****
 # Get AI trade recommendations for the selected tickers
+update_splash_message("Working on: Calculating AI trade recommendations...")
 print("🤖 STEP 3.5: Getting AI trade recommendations for selected tickers...")
 print(f"   Input tickers for AI: {tickers}")
 
@@ -5297,7 +5602,7 @@ def refresh_ai_recommendations():
         ai_recommendations = pd.DataFrame()
         top5_ai = pd.DataFrame()
                                 # ***** Get quiver data for first pull comment out afer first run *****
-
+update_splash_message("Working on: Gathering Congressional & institutional trading data...")
 daily_full_quiver_pull(
     tickers,
     cache_path="quiver_congress_cache.json",
@@ -5357,7 +5662,7 @@ def scheduler_loop():
         print("🔍 [LOOP] Scheduled Jobs:", schedule.jobs)
         schedule.run_pending()
         print("🚀 [LOOP] Waiting for next scheduled job... (sleeping 30s)")
-        print("Current time :", datetime.now().strftime('%H:%M:%S'))
+        print("Day Trader Current time :", datetime.now().strftime('%H:%M:%S'))
         time.sleep(30)
 
 
@@ -5366,6 +5671,7 @@ scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
 scheduler_thread.start()
 
 # 🔥 IMMEDIATE FIX: Start streaming data collection immediately to avoid 5-minute gap
+update_splash_message("Working on: Initializing real-time data streaming...")
 print("🚀 [STARTUP] Running initial realtime/historical job to start streaming immediately...")
 try:
     realtime_or_historical_job()
@@ -5381,6 +5687,7 @@ except Exception as e:
 
 # Start the dashboard in the main thread (blocking)
 # Add a small delay to ensure any pending authentication processes complete
+update_splash_message("Working on: Launching dashboard interface...")
 print("🚀 [STARTUP] Final step: Starting dashboard...")
 time.sleep(1)  # Brief pause to ensure authentication is fully settled
 run_dashboard_thread()

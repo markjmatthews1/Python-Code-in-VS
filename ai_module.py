@@ -788,13 +788,53 @@ def get_trade_recommendations(
         print(f"🔍 {ticker}: Vol {range_pct:.3f} vs Thresh {volatility_threshold:.3f}")
         print(f"    Raw Prob: {raw_prob_up:.2%} → Calibrated: {prob_up:.2%}")
 
-        # Decision logic
+        # **NEW: Classify signal type and direction**
         if range_pct < volatility_threshold:
-            recommendation = f"❌ No trade — low volatility ({range_pct:.3f} < {volatility_threshold:.3f})"
-        elif prob_up >= AI_PROB_THRESHOLD:
-            recommendation = f"🔥 TRADE: Entry {entry:.2f}, Target {target:.2f}, Stop {stop:.2f}"
-        else:
-            recommendation = f"❌ No trade (prob {prob_up:.2%} < {AI_PROB_THRESHOLD:.2%})"
+            signal_type = "NO_TRADE_LOW_VOL"
+            signal_strength = "⚫"
+            direction = "WAIT"
+            recommendation = f"⚫ No trade — low volatility ({range_pct:.3f} < {volatility_threshold:.3f})"
+        elif prob_up >= 0.70:  # Lowered from 0.75 to 0.70 for more STRONG_LONG signals
+            signal_type = "STRONG_LONG"
+            signal_strength = "🟢🟢"
+            direction = "LONG"
+            recommendation = f"🟢🟢 STRONG LONG: Entry ${entry:.2f}, Target ${target:.2f}, Stop ${stop:.2f}"
+        elif prob_up >= 0.55:  # Lowered from 0.60 to 0.55 for more LONG signals
+            signal_type = "LONG"
+            signal_strength = "🟢"
+            direction = "LONG"
+            recommendation = f"🟢 LONG: Entry ${entry:.2f}, Target ${target:.2f}, Stop ${stop:.2f}"
+        elif prob_up >= 0.45:
+            signal_type = "NEUTRAL"
+            signal_strength = "🟡"
+            direction = "WAIT"
+            recommendation = f"🟡 NEUTRAL: Choppy/unclear — wait for better setup (prob {prob_up:.1%})"
+        elif prob_up >= 0.30:  # Lowered from 0.25 to 0.30 to be more conservative with shorts
+            # Bearish zone - good for shorts
+            signal_type = "SHORT"
+            signal_strength = "🔴"
+            direction = "SHORT"
+            prob_down = 1 - prob_up
+            short_entry = current_price
+            short_target = round(short_entry * (1 - AI_TARGET_PERCENT), 2)  # Target lower
+            short_stop = round(short_entry * (1 + AI_STOP_PERCENT), 2)  # Stop higher
+            recommendation = f"🔴 SHORT: Entry ${short_entry:.2f}, Target ${short_target:.2f}, Stop ${short_stop:.2f} (prob down {prob_down:.1%})"
+            entry = short_entry
+            target = short_target
+            stop = short_stop
+        else:  # prob_up < 0.30 (lowered from 0.25)
+            # Strong bearish - definitely short
+            signal_type = "STRONG_SHORT"
+            signal_strength = "🔴🔴"
+            direction = "SHORT"
+            prob_down = 1 - prob_up
+            short_entry = current_price
+            short_target = round(short_entry * (1 - AI_TARGET_PERCENT), 2)
+            short_stop = round(short_entry * (1 + AI_STOP_PERCENT), 2)
+            recommendation = f"🔴🔴 STRONG SHORT: Entry ${short_entry:.2f}, Target ${short_target:.2f}, Stop ${short_stop:.2f} (prob down {prob_down:.1%})"
+            entry = short_entry
+            target = short_target
+            stop = short_stop
 
         # Log prediction for feedback loop
         entry_time = latest.iloc[i]["datetime"] if "datetime" in latest.columns else datetime.now()
@@ -803,6 +843,9 @@ def get_trade_recommendations(
 
         results.append({
             "ticker": ticker,
+            "signal_type": signal_type,
+            "signal_strength": signal_strength,
+            "direction": direction,
             "probability": prob_up,
             "raw_probability": raw_prob_up,  # Keep original for debugging
             "entry": entry,
@@ -813,19 +856,38 @@ def get_trade_recommendations(
             "vol_threshold": volatility_threshold
         })
 
-    df_results = pd.DataFrame(results).sort_values("probability", ascending=False)
+    df_results = pd.DataFrame(results)
     
-    # **Debug Summary**
+    # **Enhanced Summary with Signal Classification**
     total_tickers = len(results)
-    low_vol_filtered = len([r for r in results if "low volatility" in r["recommendation"]])
-    low_prob_filtered = len([r for r in results if "probability below threshold" in r["recommendation"]])
-    trade_candidates = len([r for r in results if "TRADE:" in r["recommendation"]])
+    strong_long = len([r for r in results if r["signal_type"] == "STRONG_LONG"])
+    long_signals = len([r for r in results if r["signal_type"] == "LONG"])
+    neutral = len([r for r in results if r["signal_type"] == "NEUTRAL"])
+    short_signals = len([r for r in results if r["signal_type"] == "SHORT"])
+    strong_short = len([r for r in results if r["signal_type"] == "STRONG_SHORT"])
+    low_vol = len([r for r in results if r["signal_type"] == "NO_TRADE_LOW_VOL"])
     
-    print(f"📊 AI RECOMMENDATION SUMMARY:")
-    print(f"   Total tickers: {total_tickers}")
-    print(f"   Filtered by volatility: {low_vol_filtered}")
-    print(f"   Filtered by probability: {low_prob_filtered}")
-    print(f"   🔥 Trade candidates: {trade_candidates}")
+    print(f"\n{'='*60}")
+    print(f"📊 AI SIGNAL CLASSIFICATION SUMMARY")
+    print(f"{'='*60}")
+    print(f"   Total tickers analyzed: {total_tickers}")
+    print(f"\n🟢 LONG SIGNALS:")
+    print(f"   🟢🟢 Strong Long: {strong_long}")
+    print(f"   🟢   Long:        {long_signals}")
+    print(f"\n🟡 NEUTRAL:")
+    print(f"   🟡   Neutral:     {neutral}")
+    print(f"\n🔴 SHORT SIGNALS:")
+    print(f"   🔴   Short:       {short_signals}")
+    print(f"   🔴🔴 Strong Short: {strong_short}")
+    print(f"\n⚫ FILTERED:")
+    print(f"   ⚫   Low Volume:  {low_vol}")
+    print(f"\n✅ TRADEABLE SIGNALS: {strong_long + long_signals + short_signals + strong_short}")
+    print(f"{'='*60}\n")
+    
+    # Sort by signal quality (strong signals first, then by probability)
+    signal_order = {"STRONG_LONG": 5, "LONG": 4, "SHORT": 2, "STRONG_SHORT": 1, "NEUTRAL": 3, "NO_TRADE_LOW_VOL": 0}
+    df_results["sort_order"] = df_results["signal_type"].map(signal_order)
+    df_results = df_results.sort_values(["sort_order", "probability"], ascending=[False, False]).drop("sort_order", axis=1)
     
     if return_df:
         return df_results

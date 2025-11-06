@@ -46,11 +46,12 @@ A sophisticated automated day trading system with dual interface (GUI + Web), re
   - Complete trade history with status indicators
   - Performance dashboard with key metrics
   - Dark theme with professional color scheme
+  - **📊 Trade History Editor**: NEW! Manage closed trades with delete capability
 - **Web Dashboard**: Full-featured browser interface at localhost:8051
   - Real-time API endpoints for live data
   - Responsive design for any device
   - Synchronized with GUI for consistent experience
-- **Integrated Launch**: Web dashboard button in GUI for seamless switching
+- **Integrated Launch**: Web dashboard and trade history buttons in GUI for seamless access
 
 #### **⚡ Risk Management System**
 - **Position Sizing**: Dynamic calculation based on account size ($10,000)
@@ -76,7 +77,8 @@ enhanced_day_trader/ (✅ COMPLETED)
 ├── data/                       # 📈 Market data integration
 │   └── schwab_market_data.py   # 🔗 Schwab API wrapper
 ├── ui/                         # 🎨 User interface
-│   └── trade_display.py        # 💻 Native GUI with colorful display
+│   ├── trade_display.py        # 💻 Native GUI with colorful display
+│   └── trade_history_editor.py # 📊 Trade history manager (NEW!)
 └── README.md                   # 📚 This documentation
 ```
 
@@ -100,6 +102,7 @@ python main_trader.py
 ### **🌐 Access Methods**
 - **Native GUI**: Automatically opens with colorful trading interface
 - **Web Dashboard**: Click "🌐 Open Web Dashboard" button in GUI
+- **Trade History Editor**: Click "📊 Trade History Editor" button in GUI
 - **Direct Web Access**: `http://localhost:8051`
 - **Menu Integration**: Available from Etrade_menu.py button
 
@@ -151,7 +154,58 @@ python main_trader.py
 
 ---
 
-## 🛡️ **Safety & Controls**
+## � **Trade History Editor** (NEW!)
+
+### **✨ Features**
+- **View All Closed Trades**: Comprehensive trade history in sortable table
+- **Delete Incorrect Trades**: Remove test trades, duplicates, or errors
+- **Colorful Display**: Green profits, red losses, gray breakeven
+- **Arial 12+ Fonts**: Easy-to-read interface
+- **Summary Statistics**: Total trades, wins, losses, total P&L
+- **Ticker Filtering**: View trades for specific stocks/ETFs
+- **CSV Export**: Export trade history for tax records or analysis
+- **Batch Operations**: Select multiple trades for deletion
+
+### **🎨 Visual Design**
+- **Trade Row Colors**:
+  - 🟢 **Green Background**: Profitable trades
+  - 🔴 **Red Background**: Losing trades
+  - ⚪ **Gray Background**: Breakeven trades
+- **Summary Stats**: Blue (total), Green (wins), Red (losses)
+- **Selection Highlight**: Purple background for selected trades
+- **Dark Theme**: Professional dark UI with high contrast
+
+### **🗑️ Delete Functionality**
+- **Select Trades**: Click checkbox in first column
+- **Batch Select**: Select All / Deselect All buttons
+- **Confirmation**: Shows count before deletion
+- **Permanent**: Cannot be undone - use carefully!
+- **Auto-Update**: Recalculates all P&L automatically
+- **Immediate Save**: Updates trades.json on deletion
+
+### **📋 Use Cases**
+1. **Clean Up Test Trades**: Remove fake/test entries after system testing
+2. **Fix Duplicates**: Delete duplicate trades from data issues
+3. **Remove Errors**: Delete incorrect trades from bugs or bad data
+4. **Export Records**: Save to CSV for year-end tax preparation
+5. **Performance Review**: Filter by ticker to analyze specific stocks
+
+### **🚀 How to Access**
+```bash
+# From Main GUI
+Click "📊 Trade History Editor" button in top-right corner
+
+# Standalone Test
+python test_trade_history_editor.py
+```
+
+### **📖 Documentation**
+- **Full Guide**: `TRADE_HISTORY_EDITOR_GUIDE.md` - Complete documentation
+- **Quick Reference**: `TRADE_HISTORY_QUICK_REF.md` - Quick start guide
+
+---
+
+## �🛡️ **Safety & Controls**
 
 ### **✅ Risk Management**
 - **Paper Trading Only**: No real money at risk
@@ -179,6 +233,7 @@ python main_trader.py
 6. **✅ Dual Interface**: Native GUI + Web dashboard with sync
 7. **✅ Data Synchronization**: Fixed duplicates, unified data source
 8. **✅ Production Ready**: Full automation with monitoring
+9. **✅ Trade History Editor**: NEW! View and manage closed trades with delete capability
 
 ### **🎯 Key Achievements**
 - **Signal Quality**: 50% minimum threshold for trade execution

@@ -166,10 +166,11 @@ def ensure_fresh_token(buffer_seconds=120):
 def refresh_access_token():
     tokens = load_tokens()
     if not tokens or "refresh_token" not in tokens:
-        print("No refresh token available. Please run Schwab_auth.py directly to re-authenticate.")
+        print("No refresh token available. Need full re-authentication.")
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
-        schwab_auth_popup_and_sound(AUTH_URL)
+        # Start full authentication process instead of just popup
+        start_full_authentication_process()
         return None
 
     auth_header = base64.b64encode(f"{APP_KEY}:{APP_SECRET}".encode()).decode()
@@ -190,11 +191,76 @@ def refresh_access_token():
         return new_tokens
     else:
         print(f"Failed to refresh token: {response.status_code} - {response.text}")
-        print("Please run Schwab_auth.py directly to re-authenticate.")
+        print("Refresh token likely expired. Starting full re-authentication.")
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
-        schwab_auth_popup_and_sound(AUTH_URL)
+        # Start full authentication process instead of just popup
+        start_full_authentication_process()
         return None
+
+def start_full_authentication_process():
+    """
+    Start the complete authentication process with Flask server.
+    This is needed when refresh tokens expire and full OAuth is required.
+    """
+    print("🔄 Starting full Schwab re-authentication process...")
+    
+    # Clean up any stale signal files
+    try:
+        if os.path.exists("auth_complete.txt"):
+            os.remove("auth_complete.txt")
+    except:
+        pass
+    
+    # Start Flask server in background thread
+    print("Starting Flask server for OAuth callback...")
+    def run_flask():
+        try:
+            app.run(
+                host="127.0.0.1",
+                port=5000,
+                ssl_context=("C:/Users/mjmat/mkcert/127.0.0.1.pem", "C:/Users/mjmat/mkcert/127.0.0.1-key.pem"),
+                debug=False,
+                use_reloader=False
+            )
+        except Exception as e:
+            print(f"Flask server error: {e}")
+    
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Give Flask time to start
+    time.sleep(2)
+    print("Flask server started for re-authentication")
+    
+    # Show popup and play sound
+    print("Displaying re-authentication popup...")
+    schwab_auth_popup_and_sound(AUTH_URL)
+    
+    # Wait for completion (similar to main() function logic)
+    max_wait_time = 300  # 5 minutes
+    start_time = time.time()
+    
+    while time.time() - start_time < max_wait_time:
+        # Check if authentication completed
+        new_tokens = load_tokens()
+        if new_tokens and new_tokens.get("access_token"):
+            print("✅ Re-authentication completed successfully!")
+            
+            # Create completion signal
+            try:
+                with open("auth_complete.txt", "w") as f:
+                    f.write(f"reauth_completed_at_{int(time.time())}")
+            except:
+                pass
+            
+            return new_tokens
+        
+        # Short wait before checking again
+        time.sleep(2)
+    
+    print("⚠️ Re-authentication timeout reached")
+    return None
 
 debug_token_status = None # call this function to check token status
 
@@ -372,15 +438,33 @@ def main():
     print("Displaying authentication popup...")
     schwab_auth_popup_and_sound(AUTH_URL)
     
-    # Wait a moment for potential completion
-    time.sleep(2)
+    # Enhanced waiting for completion when called as subprocess
+    max_wait_time = 300  # 5 minutes
+    start_time = time.time()
     
-    # Check if authentication completed
-    final_tokens = load_tokens()
-    if final_tokens:
-        print("Authentication completed successfully!")
-    else:
-        print("Authentication may not have completed. Check for any error messages above.")
+    while time.time() - start_time < max_wait_time:
+        # Check if authentication completed
+        final_tokens = load_tokens()
+        if final_tokens and final_tokens.get("access_token"):
+            print("Authentication completed successfully!")
+            
+            # Create additional completion signals for subprocess detection
+            try:
+                with open("auth_complete.txt", "w") as f:
+                    f.write(f"completed_at_{int(time.time())}")
+                print("Auth completion signal created")
+            except Exception as e:
+                print(f"Warning: Could not create completion signal: {e}")
+            
+            # Give time for calling process to detect completion
+            time.sleep(3)
+            return
+        
+        # Short wait before checking again
+        time.sleep(2)
+    
+    print("Authentication timeout reached. Manual intervention may be required.")
+    print("If you completed authentication, tokens should be available.")
 
 if __name__ == "__main__":
     main()

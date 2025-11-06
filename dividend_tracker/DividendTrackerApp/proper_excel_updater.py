@@ -354,10 +354,10 @@ class ProperExcelUpdater:
             date_cell.alignment = Alignment(horizontal='right')
             date_cell.number_format = 'm/d/yyyy'
             
-            # Add dividend estimates to the new column
+            # Add dividend estimates to the new column (ANNUAL/YEARLY values)
             dividend_estimates = fresh_data.get('dividend_estimates', {})
             
-            # Map the account names
+            # Map the account names (keep as ANNUAL values)
             account_mapping = {
                 'E*TRADE IRA': dividend_estimates.get('E*TRADE IRA', 0),
                 'E*TRADE Taxable': dividend_estimates.get('E*TRADE Taxable', 0), 
@@ -394,7 +394,7 @@ class ProperExcelUpdater:
                         print(f"      📈 {account_str}: ${value:,.2f} (Color coded)")
             
             # CRITICAL: Add Row 9 Monthly Average Calculation with color coding
-            # Row 9 should calculate: =SUM(rows 4:7)/12 (ALL dividend accounts monthly average)
+            # Row 9 should calculate: =SUM(rows 4:7)/12 (ALL dividend accounts yearly total ÷ 12)
             monthly_row = None
             for row in range(8, 12):  # Look for Monthly Average row
                 cell_value = ws.cell(row=row, column=1).value
@@ -403,7 +403,7 @@ class ProperExcelUpdater:
                     break
             
             if monthly_row:
-                # Add the formula: =SUM(E4:E7)/12 format (rows 4-7, not 5-7)
+                # Add the formula: =SUM(E4:E7)/12 format (sum yearly values and divide by 12)
                 col_letter = openpyxl.utils.get_column_letter(new_col)
                 formula = f"=SUM({col_letter}4:{col_letter}7)/12"
                 
@@ -419,14 +419,14 @@ class ProperExcelUpdater:
                 ws = wb["Estimated Income 2025"]
                 
                 # Manual calculation for reliable color coding comparison
-                # Sum dividend values in rows 4-7 of the new column, then divide by 12
+                # Sum yearly dividend values in rows 4-7 of the new column, then divide by 12 for monthly
                 current_sum = 0
-                for row in range(4, 8):  # Rows 4-7 (dividend accounts)
+                for row in range(4, 8):  # Rows 4-7 (dividend accounts with yearly values)
                     cell_value = ws.cell(row=row, column=new_col).value
                     if isinstance(cell_value, (int, float)):
                         current_sum += cell_value
                 
-                calculated_value = current_sum / 12 if current_sum > 0 else 0
+                calculated_value = current_sum / 12 if current_sum > 0 else 0  # Divide yearly total by 12
                 
                 if calculated_value > 0:
                     account_name = ws.cell(row=monthly_row, column=1).value
@@ -440,7 +440,7 @@ class ProperExcelUpdater:
                             prev_cell_value = ws.cell(row=row, column=new_col - 1).value
                             if isinstance(prev_cell_value, (int, float)):
                                 prev_sum += prev_cell_value
-                        old_value = prev_sum / 12 if prev_sum > 0 else None
+                        old_value = prev_sum / 12 if prev_sum > 0 else None  # Divide yearly by 12
                     
                     # Reapply formatting with color coding and bold
                     cell = ws.cell(row=monthly_row, column=new_col)
@@ -487,33 +487,24 @@ class ProperExcelUpdater:
             return False
             
     def update_historical_yield_sheet(self):
-        """Update Accounts Div historical yield sheet with high-yield dividend filtering"""
+        """Update separate account sheets with high-yield dividend filtering"""
         try:
-            print("   📊 Updating historical yield sheet with high-yield dividend filtering...")
+            print("   📊 Updating separate account sheets with high-yield dividend filtering...")
             
-            # Import and run the final historical yield updater
+            # Import and run the NEW multi-sheet historical yield updater
             import subprocess
             import sys
             
-            # Run the final historical yield updater (with >4% yield filtering)
-            updater_script = os.path.join(self.script_dir, "final_historical_yield_updater.py")
+            # Use the new multi-sheet updater (works with separate account sheets)
+            updater_script = os.path.join(self.script_dir, "multi_sheet_historical_yield_updater.py")
             
             if not os.path.exists(updater_script):
-                print(f"      ❌ Final historical yield updater not found: {updater_script}")
-                # Fallback chain
-                fallback_scripts = [
-                    "windows_compatible_historical_yield_updater.py",
-                    "corrected_enhanced_historical_yield_updater.py",
-                    "enhanced_cache_historical_yield_updater.py", 
-                    "cache_historical_yield_updater.py"
-                ]
+                print(f"      ❌ Multi-sheet historical yield updater not found: {updater_script}")
+                # Fallback to old single-sheet updater if new one not found
+                print(f"      ⚠️  Falling back to old single-sheet updater...")
+                updater_script = os.path.join(self.script_dir, "final_historical_yield_updater.py")
                 
-                for fallback in fallback_scripts:
-                    updater_script = os.path.join(self.script_dir, fallback)
-                    if os.path.exists(updater_script):
-                        print(f"      📁 Using fallback: {fallback}")
-                        break
-                else:
+                if not os.path.exists(updater_script):
                     print(f"      ❌ No historical yield updater found")
                     return False
             
@@ -522,7 +513,7 @@ class ProperExcelUpdater:
                                   capture_output=True, text=True, cwd=self.script_dir)
             
             if result.returncode == 0:
-                print("   ✅ Historical yield sheet updated successfully (High-yield dividend filtering: >4% yield, correct accounts, proper positioning)")
+                print("   ✅ Account sheets updated successfully (High-yield dividend filtering: >4% yield, separate sheets per account)")
                 return True
             else:
                 print(f"   ❌ Historical yield updater failed: {result.stderr}")

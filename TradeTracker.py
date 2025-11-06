@@ -415,11 +415,40 @@ class TradeTrackerApp:
 
         # Realized P/L and P&L % (if closed) - these can show zero if meaningful
         close_price = parse_num(entry["Close Price"])
-        if close_price and shares and cost:
-            realized_pl = (close_price - cost) * shares
-            entry["Realized P/L"] = f"${realized_pl:,.2f}" if realized_pl != 0 else "$0.00"  # Show zero for closed trades
-            entry["P&L %"] = f"{((close_price-cost)/cost*100):.2f}%" if cost else ""
+        print(f"DEBUG: General calc entry point - close_price: {close_price}, shares: {shares}, trade_type: '{trade_type}', assigned: '{assigned_exercised}'")
+        if close_price and shares:
+            # Special handling for assigned puts
+            if "put" in trade_type and "sold" in trade_type and assigned_exercised == "Y":
+                print(f"DEBUG: General calc - Taking ASSIGNED PUT path")
+                # For assigned puts: P/L = (Close Price * Shares) - Investment
+                investment_str = entry.get("Investment", "0")
+                print(f"DEBUG: General calc - Investment string: '{investment_str}'")
+                investment_value = parse_num(str(investment_str).replace("$", "").replace(",", ""))
+                print(f"DEBUG: General calc - Parsed investment: {investment_value}")
+                if investment_value:
+                    realized_pl = (close_price * abs(shares)) - investment_value
+                    print(f"DEBUG: General calc - Assigned put P/L: ({close_price} * {abs(shares)}) - {investment_value} = {realized_pl}")
+                    entry["Realized P/L"] = f"${realized_pl:,.2f}" if realized_pl != 0 else "$0.00"
+                    entry["P&L %"] = f"{(realized_pl/investment_value*100):.2f}%" if investment_value else ""
+                    print(f"DEBUG: General calc - Final P/L: '{entry['Realized P/L']}', P&L %: '{entry['P&L %']}'")
+                else:
+                    entry["Realized P/L"] = ""
+                    entry["P&L %"] = ""
+                    print("DEBUG: General calc - No investment value, clearing P/L fields")
+            elif cost:
+                print(f"DEBUG: General calc - Taking REGULAR path")
+                # Regular calculation for all other trade types
+                realized_pl = (close_price - cost) * shares
+                print(f"DEBUG: General calc - Regular P/L: ({close_price} - {cost}) * {shares} = {realized_pl}")
+                entry["Realized P/L"] = f"${realized_pl:,.2f}" if realized_pl != 0 else "$0.00"  # Show zero for closed trades
+                entry["P&L %"] = f"{((close_price-cost)/cost*100):.2f}%" if cost else ""
+                print(f"DEBUG: General calc - Regular final P/L: '{entry['Realized P/L']}', P&L %: '{entry['P&L %']}'")
+            else:
+                print(f"DEBUG: General calc - NO COST, clearing P/L fields")
+                entry["Realized P/L"] = ""
+                entry["P&L %"] = ""
         else:
+            print(f"DEBUG: General calc - NO CLOSE PRICE or SHARES, clearing P/L fields")
             entry["Realized P/L"] = ""
             entry["P&L %"] = ""
 
@@ -601,6 +630,14 @@ class TradeTrackerApp:
                     value = entered_notes
                 elif col == "Assigned/Exercised" and entered_assigned:
                     value = entered_assigned
+                # Special handling for Notes2 - preserve any existing value
+                elif col == "Notes2":
+                    current_notes2 = self.vars[col].get().strip()
+                    if current_notes2:
+                        print(f"DEBUG: Preserving existing Notes2 value: '{current_notes2}'")
+                        value = current_notes2
+                    else:
+                        print(f"DEBUG: Setting Notes2 from Excel: '{value}'")
                 self.vars[col].set(value)
                 print(f"DEBUG: Setting {col} = '{value}'")
         
@@ -634,6 +671,11 @@ class TradeTrackerApp:
                     gui_value = self.vars[col].get().strip()
                     entry[col] = gui_value
                     print(f"DEBUG: Updated from GUI - {col} = '{gui_value}'")
+                    # Special debug for Notes2
+                    if col == "Notes2":
+                        print(f"DEBUG: *** Notes2 specifically captured from GUI: '{gui_value}' ***")
+                        print(f"DEBUG: *** Notes2 StringVar object: {self.vars[col]} ***")
+                        print(f"DEBUG: *** Notes2 StringVar.get() raw: '{self.vars[col].get()}' ***")
 
             # Always use the Cost from the GUI for all calculations and updates
             cost_from_gui = entry["Cost"]
@@ -662,6 +704,13 @@ class TradeTrackerApp:
 
             # Always get header and column indices before any for-loop that uses them
             header = [cell.value for cell in ws[1]]
+            
+            # CRITICAL: Ensure calculated Investment value is in the entry dictionary before close logic
+            if "put" in trade_type and "sold" in trade_type and assigned_exercised == "Y":
+                if strike and cost and shares:
+                    calculated_investment = (strike - cost) * abs(shares)
+                    entry["Investment"] = self.format_currency(calculated_investment) if calculated_investment > 0 else ""
+                    print(f"DEBUG: *** FIXED - Investment recalculated for close logic: ${calculated_investment} -> '{entry['Investment']}' ***")
             ticker_col = self.find_header_column(header, ["Stock ticker", "Ticker"])
             date_col = self.find_header_column(header, ["Date of transaction", "Trade Date", "Date"])
             shares_col = self.find_header_column(header, ["Number of shares +/-", "Shares", "Quantity"])
@@ -680,8 +729,11 @@ class TradeTrackerApp:
                     if "Investment" in self.vars:
                         self.vars["Investment"].set(entry["Investment"])
                     print(f"DEBUG: Assigned Put - Investment calculated for GUI/Excel: (${strike} - ${cost}) * {abs(shares)} = ${assignment_investment}")
+                    print(f"DEBUG: Assigned Put - Investment set in entry: '{entry['Investment']}'")
+                    print(f"DEBUG: Assigned Put - Investment set in GUI: '{self.vars['Investment'].get()}'")
                 else:
                     entry["Investment"] = ""
+                    print(f"DEBUG: Assigned Put - No strike/cost/shares, Investment set to empty")
                 # Find row in Excel matching Ticker, Date, Shares
                 match_row = None
                 print(f"DEBUG: Looking for ticker='{original_values['Ticker']}', date='{original_values['Date']}', shares='{original_values['Shares']}', strike='{original_values['Strike']}', cost='{original_values['Cost']}', notes='{original_values['Notes']}'")
@@ -905,10 +957,20 @@ class TradeTrackerApp:
                     print(f"DEBUG: Row {r}: ticker='{ticker}', date='{excel_date_str}', shares='{shares}', strike='{excel_strike}', cost='{excel_cost}', notes='{excel_notes}'")
                     print(f"DEBUG: Comparing with: ticker='{str(trade[COLUMNS.index('Ticker')])}', date='{trade_date_str}', shares='{str(trade[COLUMNS.index('Shares')])}', strike='{trade_strike}', cost='{trade_cost}', notes='{trade_notes}'")
                     
+                    # Normalize shares for comparison (handles -100 vs -100.0)
+                    def normalize_shares(val):
+                        try:
+                            return float(str(val).replace("$","").replace(",","").strip())
+                        except:
+                            return None
+                    
+                    excel_shares = normalize_shares(shares)
+                    trade_shares = normalize_shares(trade[COLUMNS.index("Shares")])
+                    
                     # Enhanced matching: ticker, date, shares must match
                     basic_match = (str(ticker) == str(trade[COLUMNS.index("Ticker")]) and 
                                    excel_date_str == trade_date_str and 
-                                   str(shares) == str(trade[COLUMNS.index("Shares")]))
+                                   excel_shares == trade_shares)
                     
                     if basic_match:
                         # For identical trades, try to distinguish by notes first, then by strike/cost
@@ -1053,6 +1115,22 @@ class TradeTrackerApp:
                     
                     if close_date and close_price_val:
                         print("DEBUG: Close conditions met, entering close trade logic")
+                        
+                        # CRITICAL FIX: Recalculate Investment for assigned puts RIGHT BEFORE close logic
+                        assigned_exercised = entry.get("Assigned/Exercised", "").strip().upper()
+                        trade_type = entry["Type"].lower().strip()
+                        if "put" in trade_type and "sold" in trade_type and assigned_exercised == "Y":
+                            try:
+                                strike_val = float(str(entry["Strike"]).replace("$","").replace(",","").strip())
+                                cost_val = float(str(entry["Cost"]).replace("$","").replace(",","").strip())
+                                shares_val = float(str(entry["Shares"]).replace("$","").replace(",","").strip())
+                                if strike_val and cost_val and shares_val:
+                                    calculated_investment = (strike_val - cost_val) * abs(shares_val)
+                                    entry["Investment"] = f"${calculated_investment:,.2f}"
+                                    print(f"DEBUG: *** CLOSE LOGIC FIX - Investment recalculated: ${calculated_investment} -> '{entry['Investment']}' ***")
+                            except Exception as e:
+                                print(f"DEBUG: Error recalculating Investment: {e}")
+                        
                         try:
                             print("DEBUG: Trade is being closed!")
                             # Trade is being closed - calculate final P/L and clear open position fields
@@ -1065,35 +1143,76 @@ class TradeTrackerApp:
                             print(f"DEBUG: Parsed shares = {shares_num}, cost = {cost_num}")
                         
                             # Calculate realized P/L and P&L %
-                            if close_price and shares_num and cost_num:
-                                realized_pl = (close_price - cost_num) * shares_num
-                                entry["Realized P/L"] = f"${realized_pl:,.2f}"
-                                
-                                # P&L % calculation depends on trade type - store as integer rounded number
+                            if close_price and shares_num:
+                                # Special handling for assigned puts
+                                assigned_exercised = entry.get("Assigned/Exercised", "").strip().upper()
                                 trade_type = entry["Type"].lower().strip()
-                                if "sold" in trade_type:
-                                    # For sold options: (premium_received - buy_back_cost) / premium_received * 100
-                                    # Since shares are negative for sold options, and cost is the premium received
-                                    pl_percent = ((cost_num - close_price)/cost_num*100) if cost_num else 0
-                                    entry["P&L %"] = str(round(pl_percent)) if cost_num else ""
+                                
+                                print(f"DEBUG: Close logic - entry keys: {list(entry.keys())}")
+                                print(f"DEBUG: Close logic - Investment in entry: {'Investment' in entry}")
+                                print(f"DEBUG: Close logic - All Investment-related values in entry:")
+                                for k, v in entry.items():
+                                    if 'invest' in k.lower() or 'Investment' in k:
+                                        print(f"DEBUG:   {k}: '{v}'")
+                                
+                                if "put" in trade_type and "sold" in trade_type and assigned_exercised == "Y":
+                                    # For assigned puts: P/L = (Close Price * Shares) - Investment
+                                    investment_str = entry.get("Investment", "0")
+                                    print(f"DEBUG: Investment string for assigned put: '{investment_str}'")
+                                    
+                                    # Parse investment value properly
+                                    if investment_str:
+                                        investment_value = self.parse_num(str(investment_str))
+                                    else:
+                                        investment_value = 0
+                                    
+                                    print(f"DEBUG: Parsed investment value: {investment_value}")
+                                    
+                                    if investment_value:
+                                        realized_pl = (close_price * abs(shares_num)) - investment_value
+                                        entry["Realized P/L"] = f"${realized_pl:,.2f}"
+                                        entry["P&L %"] = str(round((realized_pl/investment_value*100))) if investment_value else ""
+                                        print(f"DEBUG: Assigned put P/L calculation: ({close_price} * {abs(shares_num)}) - {investment_value} = {realized_pl}")
+                                        print(f"DEBUG: Assigned put P&L %: {realized_pl}/{investment_value}*100 = {(realized_pl/investment_value*100):.2f}%")
+                                    else:
+                                        entry["Realized P/L"] = ""
+                                        entry["P&L %"] = ""
+                                        print("DEBUG: No investment value found for assigned put")
+                                elif cost_num:
+                                    # Regular calculation for all other trade types
+                                    realized_pl = (close_price - cost_num) * shares_num
+                                    entry["Realized P/L"] = f"${realized_pl:,.2f}"
+                                    
+                                    # P&L % calculation depends on trade type - store as integer rounded number
+                                    if "sold" in trade_type:
+                                        # For sold options: (premium_received - buy_back_cost) / premium_received * 100
+                                        # Since shares are negative for sold options, and cost is the premium received
+                                        pl_percent = ((cost_num - close_price)/cost_num*100) if cost_num else 0
+                                        entry["P&L %"] = str(round(pl_percent)) if cost_num else ""
+                                    else:
+                                        # For bought options/stocks: standard calculation
+                                        pl_percent = ((close_price-cost_num)/cost_num*100) if cost_num else 0
+                                        entry["P&L %"] = str(round(pl_percent)) if cost_num else ""
                                 else:
-                                    # For bought options/stocks: standard calculation
-                                    pl_percent = ((close_price-cost_num)/cost_num*100) if cost_num else 0
-                                    entry["P&L %"] = str(round(pl_percent)) if cost_num else ""
+                                    entry["Realized P/L"] = ""
+                                    entry["P&L %"] = ""
                             else:
                                 entry["Realized P/L"] = ""
                                 entry["P&L %"] = ""
                             
-                            # Clear fields that are only relevant for open trades
+                            print(f"DEBUG: After P&L calculation - Realized P/L: '{entry.get('Realized P/L', 'NOT FOUND')}'")
+                            print(f"DEBUG: After P&L calculation - P&L %: '{entry.get('P&L %', 'NOT FOUND')}'")
+                            
+                            # Clear fields that are only relevant for open trades (AFTER P&L calculation)
                             entry["Investment"] = ""
                             entry["Call Value"] = ""
                             entry["Put Value"] = ""
                             entry["Put Cash Req"] = ""
                             entry["Current Price"] = ""
                             entry["Current P/L"] = ""
-                            print(f"DEBUG: Cleared open trade fields for closed trade")
-                            
-                            # Update Excel with final calculations for closed trade
+                            print(f"DEBUG: Cleared open trade fields for closed trade")                            # Update Excel with final calculations for closed trade
+                            print(f"DEBUG: About to update Excel - Realized P/L in entry: '{entry.get('Realized P/L', 'NOT FOUND')}'")
+                            print(f"DEBUG: About to update Excel - P&L % in entry: '{entry.get('P&L %', 'NOT FOUND')}'")
                             for col_idx, col_name in enumerate(header, start=1):
                                 app_col = EXCEL_TO_APP_COLS.get(col_name, col_name)
                                 value = entry.get(app_col, "")  # Use get() to handle all columns
@@ -1157,6 +1276,7 @@ class TradeTrackerApp:
                             self.tree.item(item, values=trade)
                             
                             # Move to closed trades sheet and remove from GUI - pass the cleaned entry data
+                            print(f"DEBUG: *** About to move trade to closed - Notes2 in entry: '{entry.get('Notes2', 'NOT FOUND')}' ***")
                             self.move_trade_to_closed(entry, match_row, excel_filename)
                             # Remove from GUI
                             self.tree.delete(item)
@@ -1279,6 +1399,10 @@ class TradeTrackerApp:
                 # Get the header to determine column type
                 header_cell = closed_sheet.cell(row=1, column=col_idx)
                 header_name = header_cell.value if header_cell.value else ""
+                
+                # Special debug for Notes2
+                if header_name == "Notes2":
+                    print(f"DEBUG: *** Notes2 being written to closed sheet: '{value}' ***")
                 
                 # Apply proper formatting based on column type
                 cell.font = Font(name="Arial", size=12)

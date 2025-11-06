@@ -85,24 +85,60 @@ class PortfolioSummaryUpdater:
         return values
     
     def get_dividend_estimates(self, cache_data):
-        """Calculate dividend estimates from yields data using the working approach"""
-        positions_data = cache_data.get('positions', {})
+        """Get dividend estimates from pre-calculated data in cache"""
+        # Use pre-calculated dividend estimates from cache (calculated by portfolio_data_collector.py)
+        dividend_estimates_data = cache_data.get('dividend_estimates', {})
         
-        # Get yields data from cache using the correct key 'ticker_yields'
+        if not dividend_estimates_data:
+            print("    Warning: No dividend_estimates in cache, calculating from positions...")
+            return self.calculate_dividend_estimates_from_positions(cache_data)
+        
+        # Extract account breakdown from the pre-calculated data
+        etrade_ira_annual = dividend_estimates_data.get('E*TRADE IRA', 0)
+        etrade_taxable_annual = dividend_estimates_data.get('E*TRADE Taxable', 0)
+        schwab_ira_annual = dividend_estimates_data.get('Schwab IRA', 0)
+        schwab_individual_annual = dividend_estimates_data.get('Schwab Individual', 0)
+        
+        total_annual = etrade_ira_annual + etrade_taxable_annual + schwab_ira_annual + schwab_individual_annual
+        total_weekly = total_annual / 52
+        total_monthly = total_annual / 12
+        
+        account_breakdown = {
+            'etrade_ira': etrade_ira_annual,
+            'etrade_taxable': etrade_taxable_annual,
+            'schwab_ira': schwab_ira_annual,
+            'schwab_individual': schwab_individual_annual
+        }
+        
+        estimates = {
+            'weekly': total_weekly,
+            'monthly': total_monthly,
+            'annual': total_annual,
+            'account_breakdown': account_breakdown
+        }
+        
+        print(f"  Weekly Estimate: ${total_weekly:.2f}")
+        print(f"  Monthly Estimate: ${total_monthly:.2f}")
+        print(f"  Annual Estimate: ${total_annual:.2f}")
+        print(f"    E*TRADE IRA: ${etrade_ira_annual:,.2f}")
+        print(f"    E*TRADE Taxable: ${etrade_taxable_annual:,.2f}")
+        print(f"    Schwab IRA: ${schwab_ira_annual:,.2f}")
+        print(f"    Schwab Individual: ${schwab_individual_annual:,.2f}")
+        
+        return estimates
+    
+    def calculate_dividend_estimates_from_positions(self, cache_data):
+        """Fallback: Calculate dividend estimates from positions if pre-calculated data not available"""
+        positions_data = cache_data.get('positions', {})
         yields_data = cache_data.get('ticker_yields', {})
         
         print(f"    Found {len(yields_data)} tickers with yield data in cache")
         
-        # If no yields in cache, something is wrong
         if not yields_data:
             print("    ERROR: No ticker_yields data found in cache!")
             return {'weekly': 0, 'monthly': 0, 'annual': 0, 'account_breakdown': {}}
         
-        estimates = {}
-        total_weekly = 0
-        total_monthly = 0
         total_annual = 0
-        
         account_breakdown = {}
         
         for account, positions in positions_data.items():
@@ -110,18 +146,16 @@ class PortfolioSummaryUpdater:
             
             for position in positions:
                 symbol = position.get('symbol', '').strip().upper()
-                market_value = position.get('market_value', 0)
+                quantity = position.get('quantity', 0)
                 yield_info = yields_data.get(symbol, {})
-                current_yield = yield_info.get('yield', 0.0) / 100.0  # Convert to decimal
-                has_dividend = yield_info.get('has_dividend', False)
                 
-                # Only calculate if position has dividend
-                if has_dividend and current_yield > 0:
-                    # Calculate annual dividend
-                    annual_dividend = market_value * current_yield
+                # Use the CORRECT calculation method: shares × annual_dividend_per_share
+                annual_dividend_per_share = yield_info.get('annual_dividend', 0.0)
+                
+                if annual_dividend_per_share > 0 and quantity > 0:
+                    annual_dividend = quantity * annual_dividend_per_share
                     account_annual += annual_dividend
-                    
-                    print(f"    {symbol}: ${market_value:.0f} @ {yield_info.get('yield', 0):.2f}% = ${annual_dividend:.0f}/year")
+                    print(f"    {symbol}: {quantity} shares × ${annual_dividend_per_share:.2f} = ${annual_dividend:.2f}/year")
             
             # Map account names
             if account == 'etrade_ira':
@@ -138,14 +172,14 @@ class PortfolioSummaryUpdater:
         total_weekly = total_annual / 52
         total_monthly = total_annual / 12
         
-        estimates['weekly'] = total_weekly
-        estimates['monthly'] = total_monthly  
-        estimates['annual'] = total_annual
-        estimates['account_breakdown'] = account_breakdown
+        estimates = {
+            'weekly': total_weekly,
+            'monthly': total_monthly,
+            'annual': total_annual,
+            'account_breakdown': account_breakdown
+        }
         
-        print(f"  Weekly Estimate: ${total_weekly:.2f}")
-        print(f"  Monthly Estimate: ${total_monthly:.2f}")
-        print(f"  Annual Estimate: ${total_annual:.2f}")
+        print(f"  Calculated - Weekly: ${total_weekly:.2f}, Monthly: ${total_monthly:.2f}, Annual: ${total_annual:.2f}")
         
         return estimates
     
@@ -155,7 +189,8 @@ class PortfolioSummaryUpdater:
         
         try:
             # Open the Excel file to get historical data
-            wb = openpyxl.load_workbook(self.excel_file)
+            # Use data_only=True to get calculated formula values
+            wb = openpyxl.load_workbook(self.excel_file, data_only=True)
             
             if 'Portfolio Values 2025' not in wb.sheetnames:
                 print("    Warning: Portfolio Values 2025 sheet not found, using default values")
@@ -164,52 +199,77 @@ class PortfolioSummaryUpdater:
             portfolio_ws = wb['Portfolio Values 2025']
             max_col = portfolio_ws.max_column
             
-            # Get current week total (row 10, latest column)
+            # Year-start value is in column B (column 2), row 10
+            # B10 = SUM(B4:B8) which is the 12/29/2024 beginning balance
+            # With data_only=True, this will be the calculated value
+            year_start_total = portfolio_ws.cell(row=10, column=2).value
+            
+            # If data_only didn't work, manually sum B4:B8
+            if not isinstance(year_start_total, (int, float)) or year_start_total == 0:
+                print("    B10 formula not calculated, manually summing B4:B8...")
+                year_start_total = 0
+                for row in range(4, 9):  # Rows 4-8
+                    val = portfolio_ws.cell(row=row, column=2).value
+                    if isinstance(val, (int, float)):
+                        year_start_total += val
+            
+            print(f"    Year Start (B10 = SUM(B4:B8)): ${year_start_total:,.2f}")
+            
+            # Current week total is in the LAST data column (max_column), row 10
             current_total = portfolio_ws.cell(row=10, column=max_col).value
             
             # Handle formulas and ensure we get a numeric value
-            if isinstance(current_total, str):
-                print(f"    Current total is a formula/string: {current_total}")
-                current_total = 0
-            elif current_total is None:
-                current_total = 0
+            if isinstance(current_total, str) or current_total is None:
+                # If max_col is a formula or empty, go backwards to find last numeric value
+                print(f"    Column {max_col} is not numeric, searching backwards...")
+                for col_offset in range(0, min(5, max_col)):
+                    test_col = max_col - col_offset
+                    test_val = portfolio_ws.cell(row=10, column=test_col).value
+                    if isinstance(test_val, (int, float)) and test_val > 1000:
+                        current_total = test_val
+                        max_col = test_col
+                        print(f"    Using column {max_col} as current week: ${current_total:,.2f}")
+                        break
+                
+                if not isinstance(current_total, (int, float)):
+                    print(f"    ERROR: Could not find valid current total")
+                    current_total = 0
+            else:
+                print(f"    Current Week (col {max_col}): ${current_total:,.2f}")
             
-            # Find previous week total by going backwards until we find a numeric value
+            # Previous week total is in the column BEFORE the current one (max_col - 1)
             prev_total = 0
-            for col_offset in range(1, min(10, max_col)):  # Look back up to 10 columns
-                prev_col = max_col - col_offset
-                if prev_col < 1:
-                    break
-                    
-                prev_value = portfolio_ws.cell(row=10, column=prev_col).value
-                if isinstance(prev_value, (int, float)) and prev_value > 1000:  # Valid portfolio value
-                    prev_total = prev_value
-                    print(f"    Using column {prev_col} as previous week: ${prev_total:,.2f}")
-                    break
+            if max_col > 2:  # Make sure there's a previous column
+                prev_total = portfolio_ws.cell(row=10, column=max_col - 1).value
+                if not isinstance(prev_total, (int, float)):
+                    # If previous column is not numeric, search backwards
+                    print(f"    Column {max_col - 1} is not numeric, searching backwards...")
+                    for col_offset in range(2, min(10, max_col)):
+                        prev_col = max_col - col_offset
+                        if prev_col < 3:  # Don't go before column 3
+                            break
+                        prev_value = portfolio_ws.cell(row=10, column=prev_col).value
+                        if isinstance(prev_value, (int, float)) and prev_value > 1000:
+                            prev_total = prev_value
+                            print(f"    Using column {prev_col} as previous week: ${prev_total:,.2f}")
+                            break
+                else:
+                    print(f"    Previous Week (col {max_col - 1}): ${prev_total:,.2f}")
             
-            if prev_total == 0:
+            if prev_total == 0 or prev_total < 1000:
                 prev_total = current_total  # Fallback to prevent division by zero
+                print(f"    Warning: Using current total as previous (no valid previous week found)")
             
             # Calculate weekly change
             weekly_change_amount = current_total - prev_total
             weekly_change_percent = (weekly_change_amount / prev_total * 100) if prev_total > 0 else 0
             
-            # Get year-start value for YTD calculation - look for first numeric value
-            ytd_start_total = current_total  # Default fallback
-            for col in range(1, min(20, max_col)):  # Look at first 20 columns
-                start_value = portfolio_ws.cell(row=10, column=col).value
-                if isinstance(start_value, (int, float)) and start_value > 1000:  # Valid portfolio value
-                    ytd_start_total = start_value
-                    print(f"    Using column {col} as year start: ${ytd_start_total:,.2f}")
-                    break
+            # Calculate YTD change from year start (B10)
+            ytd_amount = current_total - year_start_total
+            ytd_percent = (ytd_amount / year_start_total * 100) if year_start_total > 0 else 0
             
-            ytd_amount = current_total - ytd_start_total
-            ytd_percent = (ytd_amount / ytd_start_total * 100) if ytd_start_total > 0 else 0
-            
-            print(f"    Current Total: ${current_total:,.2f}")
-            print(f"    Previous Week: ${prev_total:,.2f}")
-            print(f"    Weekly Change: ${weekly_change_amount:,.2f} ({weekly_change_percent:.2f}%)")
-            print(f"    YTD Change: ${ytd_amount:,.2f} ({ytd_percent:.1f}%)")
+            print(f"    ✅ Weekly Change: ${weekly_change_amount:,.2f} ({weekly_change_percent:+.2f}%)")
+            print(f"    ✅ YTD Gain: ${ytd_amount:,.2f} ({ytd_percent:+.1f}%)")
             
             wb.close()
             
@@ -381,20 +441,25 @@ class PortfolioSummaryUpdater:
         print(f"    Updated BITO percentage to {bito_yield:.2f}%")
     
     def update_last_updated_date(self, ws):
-        """Update the last updated date in row 33"""
+        """Update the last updated date at K1 (just date/time, no label)"""
         print("  Updating last updated date...")
         
         from datetime import datetime
+        from openpyxl.styles import Font, Alignment
+        
         current_date = datetime.now().strftime("%m/%d %H:%M")
         
-        # Row 33, Column H (Last Updated)
-        ws.cell(row=33, column=8).value = current_date
+        # Row 1, Column K - Just the timestamp, no "Last Updated:" label
+        cell = ws.cell(row=1, column=11)
+        cell.value = current_date
+        cell.font = Font(name='Arial', size=12)
+        cell.alignment = Alignment(horizontal='right')
         
-        print(f"    Updated last updated date to: {current_date}")
+        print(f"    Updated timestamp at K1: {current_date}")
     
     def update_dividend_cuts_section(self, ws, cache_data):
-        """Update dividend cuts (G&H) and increases (J&K) sections with DYNAMIC data from Historical Yield comparison"""
-        print("  Updating dividend cuts and increases sections with summary totals on top...")
+        """Update dividend cuts (G&H) and increases (J&K) sections with FULLY DYNAMIC data"""
+        print("  Updating dividend cuts and increases sections (fully dynamic)...")
         
         try:
             from openpyxl.styles import Font, PatternFill, Alignment
@@ -403,7 +468,8 @@ class PortfolioSummaryUpdater:
             header_font = Font(name='Arial', size=12, bold=True)
             header_fill = PatternFill(start_color='C5D9F1', end_color='C5D9F1', fill_type='solid')
             ticker_font = Font(name='Arial', size=12)
-            value_font = Font(name='Arial', size=12, color='228B22')  # Green color
+            red_font = Font(name='Arial', size=12, color='FF0000')  # Red for reductions
+            green_font = Font(name='Arial', size=12, color='228B22')  # Green for increases
             
             # Styles for summary totals at the top
             blue_fill = PatternFill(start_color='4F81BD', end_color='4F81BD', fill_type='solid')
@@ -411,49 +477,43 @@ class PortfolioSummaryUpdater:
             white_font_bold = Font(name='Arial', size=12, color='FFFFFF', bold=True)
             right_align = Alignment(horizontal='right')
             
-            # Helper function to safely set cell value and format (skip merged cells)
+            # Helper function to safely set cell value and format
             def safe_set_cell(row, col, value, font=None, fill=None, alignment=None):
                 try:
                     cell = ws.cell(row=row, column=col)
-                    if hasattr(cell, '_value'):  # Regular cell
-                        cell.value = value
-                        if font:
-                            cell.font = font
-                        if fill:
-                            cell.fill = fill
-                        if alignment:
-                            cell.alignment = alignment
-                        return True
-                    else:  # Merged cell - skip
-                        print(f"    Skipping merged cell at row {row}, col {col}")
-                        return False
-                except Exception:
-                    print(f"    Error setting cell at row {row}, col {col}")
+                    cell.value = value
+                    if font:
+                        cell.font = font
+                    if fill:
+                        cell.fill = fill
+                    if alignment:
+                        cell.alignment = alignment
+                    return True
+                except Exception as e:
+                    print(f"    Error setting cell at row {row}, col {col}: {e}")
                     return False
             
-            # Clear expanded dividend sections (rows 5-35 to handle longer lists)
-            for row in range(5, 36):
-                safe_set_cell(row, 7, None)   # Column G - Cuts tickers
-                safe_set_cell(row, 8, None)   # Column H - Cuts values  
-                safe_set_cell(row, 10, None)  # Column J - Increases tickers
-                safe_set_cell(row, 11, None)  # Column K - Increases values
+            # STEP 1: CLEAR ENTIRE DYNAMIC SECTION (G7:K35) - Delete all previous data
+            print("    Clearing previous dividend change data (G7:K35)...")
+            for row in range(7, 36):
+                safe_set_cell(row, 7, None)   # Column G
+                safe_set_cell(row, 8, None)   # Column H  
+                safe_set_cell(row, 10, None)  # Column J
+                safe_set_cell(row, 11, None)  # Column K
             
-            # Get current positions by account
-            positions = cache_data.get('positions', {})
-            
-            # DYNAMIC YIELD COMPARISON: Get yield changes from Historical Yield sheet
+            # STEP 2: Get yield changes from individual account sheets
             dividend_cuts, dividend_increases = self.get_dynamic_yield_changes()
             
-            # PLACE SUMMARY TOTALS AT THE TOP (Row 5) - Fixed position, won't get overwritten
+            # STEP 3: PLACE SUMMARY TOTALS AT THE TOP (Row 5) - Fixed position
             if dividend_cuts or dividend_increases:
                 # Calculate averages for summary
                 if dividend_cuts:
-                    avg_cuts = abs(sum(data['cut_percent'] for data in dividend_cuts.values()) / len(dividend_cuts))
+                    avg_cuts = abs(sum(item['change_percent'] for item in dividend_cuts) / len(dividend_cuts))
                 else:
                     avg_cuts = 0
                     
                 if dividend_increases:
-                    avg_increases = sum(data['increase_percent'] for data in dividend_increases.values()) / len(dividend_increases)
+                    avg_increases = sum(item['change_percent'] for item in dividend_increases) / len(dividend_increases)
                 else:
                     avg_increases = 0
                 
@@ -481,76 +541,77 @@ class PortfolioSummaryUpdater:
                 print(f"    Added dividend summary at row 5: {performance_text}")
                 print(f"    (Avg Increases: {avg_increases:.1f}% - Avg Cuts: {avg_cuts:.1f}%)")
             
-            # Start individual items below the summary (Row 7+)
+            # STEP 4: Start individual items below the summary (Row 7+)
             cuts_row = 7    # Start cuts at row 7 (below summary)
             increases_row = 7  # Start increases at row 7 (below summary)
             
-            # Process each account
-            account_names = {
-                'etrade_ira': 'Etrade IRA',
-                'etrade_taxable': 'Etrade Taxable', 
-                'schwab_ira': 'Schwab IRA',
-                'schwab_individual': 'Schwab Individual'
-            }
+            # Group dividend changes by account (ALL 4 ACCOUNTS - show even if no changes)
+            account_sheet_names = [
+                ('Etrade_IRA', 'E*TRADE IRA'),
+                ('Etrade_Individual', 'E*TRADE Taxable'), 
+                ('Schwab_IRA', 'Schwab IRA'),
+                ('Schwab_Individual', 'Schwab Individual')
+            ]
             
-            for account_key, account_name in account_names.items():
-                if account_key in positions and positions[account_key]:
-                    # Extract tickers from positions list
-                    account_positions = positions[account_key]
-                    account_tickers = set()
-                    
-                    # positions[account] is a list of position objects
-                    for position in account_positions:
-                        if isinstance(position, dict) and 'symbol' in position:
-                            account_tickers.add(position['symbol'])
-                    
-                    # Find dividend cuts and increases for this account
-                    account_cuts = []
-                    account_increases = []
-                    
-                    for ticker in account_tickers:
-                        if ticker in dividend_cuts:
-                            account_cuts.append(ticker)
-                        if ticker in dividend_increases:
-                            account_increases.append(ticker)
-                    
-                    # Process dividend CUTS (Columns G & H)
-                    if account_cuts:
-                        # Account header for cuts
-                        if safe_set_cell(cuts_row, 7, account_name):
-                            safe_set_cell(cuts_row, 8, f"{len(account_cuts)} dividend cuts:")
+            # STEP 5: Process dividend CUTS (Columns G & H) - Show ALL accounts dynamically
+            for sheet_name, display_name in account_sheet_names:
+                # Find cuts for this account (filter list by account)
+                account_cuts = [item for item in dividend_cuts if item['account'] == sheet_name]
+                
+                # Always show account header (even if no cuts)
+                safe_set_cell(cuts_row, 7, display_name, font=header_font, fill=header_fill)
+                if account_cuts:
+                    safe_set_cell(cuts_row, 8, f"{len(account_cuts)} dividend cuts", font=header_font, fill=header_fill)
+                else:
+                    safe_set_cell(cuts_row, 8, "No dividend cuts", font=header_font, fill=header_fill)
+                cuts_row += 1
+                
+                # Show each cut with RED font for values
+                if account_cuts:
+                    # Sort by ticker name
+                    for item in sorted(account_cuts, key=lambda x: x['ticker']):
+                        ticker = item['ticker']
+                        old_yield = item['old_yield']
+                        new_yield = item['new_yield']
+                        change_pct = item['change_percent']
+                        
+                        safe_set_cell(cuts_row, 7, f"  {ticker} ↓", font=ticker_font)
+                        cut_text = f"{change_pct:.1f}% ({old_yield:.2f}% → {new_yield:.2f}%)"
+                        safe_set_cell(cuts_row, 8, cut_text, font=red_font)  # RED for reductions
                         cuts_row += 1
-                        
-                        # Show each cut
-                        for ticker in sorted(account_cuts):
-                            cut_info = dividend_cuts[ticker]
-                            if safe_set_cell(cuts_row, 7, f"  {ticker} ↓"):
-                                cut_text = f"{cut_info['cut_percent']:.1f}% ({cut_info['old_yield']:.2f}% → {cut_info['new_yield']:.2f}%)"
-                                safe_set_cell(cuts_row, 8, cut_text)
-                            cuts_row += 1
-                        
-                        cuts_row += 1  # Extra space between accounts
-                    
-                    # Process dividend INCREASES (Columns J & K) with formatting
-                    if account_increases:
-                        # Account header for increases with blue background and bold font
-                        if safe_set_cell(increases_row, 10, account_name, font=header_font, fill=header_fill):
-                            safe_set_cell(increases_row, 11, f"{len(account_increases)} dividend increases:", font=header_font, fill=header_fill)
-                        increases_row += 1
-                        
-                        # Show each increase with proper formatting
-                        for ticker in sorted(account_increases):
-                            increase_info = dividend_increases[ticker]
-                            # Ticker with Arial 12 font
-                            if safe_set_cell(increases_row, 10, f"  {ticker} ↑", font=ticker_font):
-                                increase_text = f"+{increase_info['increase_percent']:.1f}% ({increase_info['old_yield']:.2f}% → {increase_info['new_yield']:.2f}%)"
-                                # Values with green font
-                                safe_set_cell(increases_row, 11, increase_text, font=value_font)
-                            increases_row += 1
-                        
-                        increases_row += 1  # Extra space between accounts
+                
+                # No extra space - keep tight formatting
             
-            print(f"    Updated dividend cuts (G&H) and increases (J&K) sections with summary totals on top")
+            # STEP 6: Process dividend INCREASES (Columns J & K) - Show ALL accounts dynamically
+            for sheet_name, display_name in account_sheet_names:
+                # Find increases for this account (filter list by account)
+                account_increases = [item for item in dividend_increases if item['account'] == sheet_name]
+                
+                # Always show account header (even if no increases)
+                safe_set_cell(increases_row, 10, display_name, font=header_font, fill=header_fill)
+                if account_increases:
+                    safe_set_cell(increases_row, 11, f"{len(account_increases)} dividend increases", font=header_font, fill=header_fill)
+                else:
+                    safe_set_cell(increases_row, 11, "No dividend increases", font=header_font, fill=header_fill)
+                increases_row += 1
+                
+                # Show each increase with GREEN font for values
+                if account_increases:
+                    # Sort by ticker name
+                    for item in sorted(account_increases, key=lambda x: x['ticker']):
+                        ticker = item['ticker']
+                        old_yield = item['old_yield']
+                        new_yield = item['new_yield']
+                        change_pct = item['change_percent']
+                        
+                        safe_set_cell(increases_row, 10, f"  {ticker} ↑", font=ticker_font)
+                        increase_text = f"+{change_pct:.1f}% ({old_yield:.2f}% → {new_yield:.2f}%)"
+                        safe_set_cell(increases_row, 11, increase_text, font=green_font)  # GREEN for increases
+                        increases_row += 1
+                
+                # No extra space - keep tight formatting
+            
+            print(f"    ✅ Updated dividend sections: {len(dividend_cuts)} cuts, {len(dividend_increases)} increases across all accounts")
             
             # Return the final row positions (no longer needed for dynamic summary placement)
             return {'cuts_final_row': cuts_row, 'increases_final_row': increases_row}
@@ -562,64 +623,75 @@ class PortfolioSummaryUpdater:
             return {'cuts_final_row': 7, 'increases_final_row': 7}  # Safe fallback
 
     def get_dynamic_yield_changes(self):
-        """Extract dividend cuts and increases by comparing Historical Yield sheet Column O vs P"""
+        """Extract dividend cuts and increases by comparing individual account sheets Column O vs P"""
         try:
-            # Load workbook to read Historical Yield sheet
+            # Load workbook to read individual account sheets
             import openpyxl
             wb = openpyxl.load_workbook(self.excel_file)
-            hist_ws = wb['Accounts Div historical yield']
             
-            dividend_cuts = {}
-            dividend_increases = {}
+            # Store as list of (account, ticker, data) instead of dict to allow duplicates
+            dividend_cuts_list = []
+            dividend_increases_list = []
             
-            # Scan the Historical Yield sheet for yield changes
-            for row in range(3, 53):  # Typical data range
-                ticker_cell = hist_ws.cell(row=row, column=1)  # Column A - Ticker
-                prev_yield_cell = hist_ws.cell(row=row, column=15)  # Column O - Previous yield
-                curr_yield_cell = hist_ws.cell(row=row, column=16)  # Column P - Current yield
-                
-                if ticker_cell.value and prev_yield_cell.value is not None and curr_yield_cell.value is not None:
-                    ticker = str(ticker_cell.value).strip().upper()
+            # List of individual account sheets to scan
+            account_sheets = ['Etrade_IRA', 'Etrade_Individual', 'Schwab_IRA', 'Schwab_Individual']
+            
+            for sheet_name in account_sheets:
+                try:
+                    ws = wb[sheet_name]
                     
-                    try:
-                        # Handle percentage values
-                        prev_yield = float(prev_yield_cell.value)
-                        curr_yield = float(curr_yield_cell.value)
+                    # Scan each account sheet for yield changes (starting from row 3, typical data range)
+                    for row in range(3, 100):  # Extended range to catch all tickers
+                        ticker_cell = ws.cell(row=row, column=1)  # Column A - Ticker
+                        prev_yield_cell = ws.cell(row=row, column=15)  # Column O - Beginning Dividend Yield
+                        curr_yield_cell = ws.cell(row=row, column=16)  # Column P - Current Yield
                         
-                        # Convert from decimal to percentage if needed
-                        if prev_yield < 1.0:
-                            prev_yield *= 100
-                        if curr_yield < 1.0:
-                            curr_yield *= 100
-                        
-                        # Calculate change
-                        if prev_yield > 0:  # Avoid division by zero
-                            change_percent = ((curr_yield - prev_yield) / prev_yield) * 100
+                        if ticker_cell.value and prev_yield_cell.value is not None and curr_yield_cell.value is not None:
+                            ticker = str(ticker_cell.value).strip().upper()
                             
-                            # Significant changes (more than 1% change)
-                            if abs(change_percent) > 1.0:
-                                if change_percent < 0:  # Dividend cut
-                                    dividend_cuts[ticker] = {
-                                        'old_yield': prev_yield,
-                                        'new_yield': curr_yield,
-                                        'cut_percent': change_percent
-                                    }
-                                else:  # Dividend increase
-                                    dividend_increases[ticker] = {
-                                        'old_yield': prev_yield,
-                                        'new_yield': curr_yield,
-                                        'increase_percent': change_percent
-                                    }
-                    except (ValueError, TypeError):
-                        continue  # Skip invalid yield data
+                            try:
+                                # Handle percentage values
+                                prev_yield = float(prev_yield_cell.value)
+                                curr_yield = float(curr_yield_cell.value)
+                                
+                                # Convert from decimal to percentage if needed
+                                if prev_yield < 1.0:
+                                    prev_yield *= 100
+                                if curr_yield < 1.0:
+                                    curr_yield *= 100
+                                
+                                # Calculate change
+                                if prev_yield > 0:  # Avoid division by zero
+                                    change_percent = ((curr_yield - prev_yield) / prev_yield) * 100
+                                    
+                                    # Significant changes (more than 1% change)
+                                    if abs(change_percent) > 1.0:
+                                        change_data = {
+                                            'ticker': ticker,
+                                            'account': sheet_name,
+                                            'old_yield': prev_yield,
+                                            'new_yield': curr_yield,
+                                            'change_percent': change_percent
+                                        }
+                                        
+                                        if change_percent < 0:  # Dividend cut
+                                            dividend_cuts_list.append(change_data)
+                                        else:  # Dividend increase
+                                            dividend_increases_list.append(change_data)
+                            except (ValueError, TypeError):
+                                continue  # Skip invalid yield data
+                                
+                except KeyError:
+                    print(f"    Warning: Account sheet '{sheet_name}' not found, skipping...")
+                    continue
             
-            print(f"    Dynamic analysis found: {len(dividend_cuts)} cuts, {len(dividend_increases)} increases")
-            return dividend_cuts, dividend_increases
+            print(f"    Dynamic analysis found: {len(dividend_cuts_list)} cuts, {len(dividend_increases_list)} increases across all accounts")
+            return dividend_cuts_list, dividend_increases_list
             
         except Exception as e:
-            print(f"    Warning: Could not read Historical Yield sheet for dynamic analysis: {e}")
-            # Fall back to empty data if historical sheet unavailable
-            return {}, {}
+            print(f"    Warning: Could not read account sheets for dynamic analysis: {e}")
+            # Fall back to empty data if sheets unavailable
+            return [], []
 
     def update_ytd_gain_loss(self, ws, performance_data):
         """Update YTD gain/loss at row 11 columns A&B with conditional formatting"""

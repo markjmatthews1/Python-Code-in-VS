@@ -1,18 +1,18 @@
 {
-  "timestamp": "2025-09-13 17:51:46",
+  "timestamp": "2025-11-01 11:03:34",
   "portfolio_values": {
-    "E*TRADE IRA": 289870.9963,
-    "E*TRADE Taxable": 65093.35,
-    "Schwab Individual": 2660.97,
-    "Schwab IRA": 51929.91,
-    "401K": 128693.17
+    "E*TRADE IRA": 291329.95,
+    "E*TRADE Taxable": 62300.2,
+    "Schwab Individual": 2833.8,
+    "Schwab IRA": 53809.52,
+    "401K": 136538.98
   },
   "positions": {
     "etrade_ira": [
       {
         "symbol": "ABR",
         "quantity": 1050.0,
-        "market_value": 12285.0,
+        "market_value": 10594.5,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -20,7 +20,7 @@
       {
         "symbol": "QDTE",
         "quantity": 304.0,
-        "market_value": 10731.2,
+        "market_value": 10971.36,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -28,7 +28,7 @@
       {
         "symbol": "PINS",
         "quantity": 200.0,
-        "market_value": 7006.0,
+        "market_value": 6620.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -36,7 +36,7 @@
       {
         "symbol": "PDI",
         "quantity": 688.0,
-        "market_value": 13656.7999,
+        "market_value": 12631.68,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -44,15 +44,7 @@
       {
         "symbol": "OFS",
         "quantity": 1385.0,
-        "market_value": 12097.975,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "NHS",
-        "quantity": 917.0,
-        "market_value": 7032.3813,
+        "market_value": 8268.45,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -60,7 +52,7 @@
       {
         "symbol": "NCLH",
         "quantity": 100.0,
-        "market_value": 2665.0,
+        "market_value": 2242.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -68,63 +60,7 @@
       {
         "symbol": "MRX",
         "quantity": 300.0,
-        "market_value": 10020.0,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "QQQI",
-        "quantity": 110.0,
-        "market_value": 5930.1,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "RYLD",
-        "quantity": 579.0,
-        "market_value": 8835.54,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "SMCI",
-        "quantity": 400.0,
-        "market_value": 18000.0,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "UGL",
-        "quantity": 100.0,
-        "market_value": 4133.0,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "SVOL",
-        "quantity": 552.0,
-        "market_value": 9985.68,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "SOXL",
-        "quantity": 110.0,
-        "market_value": 3223.0,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "SOFI",
-        "quantity": 200.0,
-        "market_value": 5310.0,
+        "market_value": 9105.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -132,7 +68,7 @@
       {
         "symbol": "MORT",
         "quantity": 90.0,
-        "market_value": 999.0,
+        "market_value": 931.5,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -140,15 +76,55 @@
       {
         "symbol": "MARA",
         "quantity": 400.0,
-        "market_value": 6524.0,
+        "market_value": 7308.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
       },
       {
-        "symbol": "MAGS",
-        "quantity": 200.0,
-        "market_value": 12586.0,
+        "symbol": "QQQI",
+        "quantity": 310.0,
+        "market_value": 17211.2,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "RYLD",
+        "quantity": 579.0,
+        "market_value": 8922.3899,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "XMTR",
+        "quantity": 100.0,
+        "market_value": 4869.0,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "SVOL",
+        "quantity": 552.0,
+        "market_value": 9786.9599,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "SOXL",
+        "quantity": 110.0,
+        "market_value": 5255.8,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "SMCI",
+        "quantity": 400.0,
+        "market_value": 20784.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -156,7 +132,7 @@
       {
         "symbol": "BRSP",
         "quantity": 568.0,
-        "market_value": 3339.84,
+        "market_value": 2930.88,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -164,7 +140,7 @@
       {
         "symbol": "BITO",
         "quantity": 440.0,
-        "market_value": 8861.6,
+        "market_value": 7955.1999,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -172,7 +148,7 @@
       {
         "symbol": "AMZU",
         "quantity": 200.0,
-        "market_value": 7612.0,
+        "market_value": 8406.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -180,7 +156,7 @@
       {
         "symbol": "AGNC",
         "quantity": 736.0,
-        "market_value": 7492.4799,
+        "market_value": 7360.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -188,7 +164,7 @@
       {
         "symbol": "ACP",
         "quantity": 1625.0,
-        "market_value": 9571.25,
+        "market_value": 9051.25,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -196,7 +172,7 @@
       {
         "symbol": "CHMI",
         "quantity": 2425.0,
-        "market_value": 7202.25,
+        "market_value": 5747.25,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -204,15 +180,7 @@
       {
         "symbol": "DSL",
         "quantity": 260.0,
-        "market_value": 3286.4,
-        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
-        "account_name": "",
-        "account_type": "IRA_ROLLOVER"
-      },
-      {
-        "symbol": "DX",
-        "quantity": 625.0,
-        "market_value": 7831.25,
+        "market_value": 3060.1999,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -220,23 +188,31 @@
       {
         "symbol": "IBKR",
         "quantity": 100.0,
-        "market_value": 6370.0,
+        "market_value": 7036.0,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "IBIT",
+        "quantity": 100.0,
+        "market_value": 6230.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
       },
       {
         "symbol": "HSAI",
-        "quantity": 200.0,
-        "market_value": 5714.0,
+        "quantity": 400.0,
+        "market_value": 9492.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
       },
       {
-        "symbol": "EQT",
+        "symbol": "FOXA",
         "quantity": 200.0,
-        "market_value": 10188.0,
+        "market_value": 12930.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -244,7 +220,7 @@
       {
         "symbol": "EIC",
         "quantity": 466.0,
-        "market_value": 6235.0799,
+        "market_value": 6044.02,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -252,7 +228,15 @@
       {
         "symbol": "ECC",
         "quantity": 1142.0,
-        "market_value": 8016.84,
+        "market_value": 7091.8199,
+        "account_id": "fOTHyxD-9tctDlNfYkhFzA",
+        "account_name": "",
+        "account_type": "IRA_ROLLOVER"
+      },
+      {
+        "symbol": "DX",
+        "quantity": 625.0,
+        "market_value": 8275.0,
         "account_id": "fOTHyxD-9tctDlNfYkhFzA",
         "account_name": "",
         "account_type": "IRA_ROLLOVER"
@@ -262,7 +246,7 @@
       {
         "symbol": "ABR",
         "quantity": 367.0,
-        "market_value": 4293.8999,
+        "market_value": 3703.03,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -270,15 +254,15 @@
       {
         "symbol": "PDI",
         "quantity": 380.0,
-        "market_value": 7543.0,
+        "market_value": 6976.8,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
       },
       {
         "symbol": "QDTE",
-        "quantity": 209.0,
-        "market_value": 7377.6999,
+        "quantity": 237.0,
+        "market_value": 8553.3299,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -286,7 +270,7 @@
       {
         "symbol": "QQQI",
         "quantity": 174.0,
-        "market_value": 9380.34,
+        "market_value": 9660.4799,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -294,7 +278,7 @@
       {
         "symbol": "RYLD",
         "quantity": 790.0,
-        "market_value": 12055.3999,
+        "market_value": 12173.8999,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -302,7 +286,7 @@
       {
         "symbol": "OFS",
         "quantity": 348.0,
-        "market_value": 3039.78,
+        "market_value": 2077.5599,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -310,7 +294,7 @@
       {
         "symbol": "MORT",
         "quantity": 90.0,
-        "market_value": 999.0,
+        "market_value": 931.5,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -318,7 +302,7 @@
       {
         "symbol": "ACP",
         "quantity": 931.0,
-        "market_value": 5483.59,
+        "market_value": 5185.67,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -326,7 +310,7 @@
       {
         "symbol": "AGNC",
         "quantity": 326.0,
-        "market_value": 3318.6799,
+        "market_value": 3260.0,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -334,7 +318,7 @@
       {
         "symbol": "BITO",
         "quantity": 200.0,
-        "market_value": 4028.0,
+        "market_value": 3616.0,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -342,7 +326,7 @@
       {
         "symbol": "EIC",
         "quantity": 300.0,
-        "market_value": 4014.0,
+        "market_value": 3891.0,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -350,7 +334,7 @@
       {
         "symbol": "SVOL",
         "quantity": 51.0,
-        "market_value": 922.59,
+        "market_value": 904.23,
         "account_id": "KdLoXe9uuGmiLrZmvOcokw",
         "account_name": "",
         "account_type": "INDIVIDUAL"
@@ -359,29 +343,50 @@
     "schwab_ira": [
       {
         "symbol": "QDTE",
-        "quantity": 285.0,
-        "market_value": 10060.5,
+        "quantity": 369.0,
+        "market_value": 13317.21,
         "account_name": "Schwab MARGIN",
         "account_number": "91562183"
       },
       {
         "symbol": "DX",
         "quantity": 400.0,
-        "market_value": 5012.0,
+        "market_value": 5296.0,
         "account_name": "Schwab MARGIN",
         "account_number": "91562183"
       },
       {
-        "symbol": "ECC",
-        "quantity": 1330.0,
-        "market_value": 9336.6,
+        "symbol": "XOMO",
+        "quantity": 338.0,
+        "market_value": 3937.7,
+        "account_name": "Schwab MARGIN",
+        "account_number": "91562183"
+      },
+      {
+        "symbol": "NVDW",
+        "quantity": 62.0,
+        "market_value": 3161.38,
         "account_name": "Schwab MARGIN",
         "account_number": "91562183"
       },
       {
         "symbol": "AGNC",
         "quantity": 1060.0,
-        "market_value": 10790.8,
+        "market_value": 10600.0,
+        "account_name": "Schwab MARGIN",
+        "account_number": "91562183"
+      },
+      {
+        "symbol": "QQQI",
+        "quantity": 134.0,
+        "market_value": 7439.68,
+        "account_name": "Schwab MARGIN",
+        "account_number": "91562183"
+      },
+      {
+        "symbol": "ECC",
+        "quantity": 1330.0,
+        "market_value": 8259.3,
         "account_name": "Schwab MARGIN",
         "account_number": "91562183"
       }
@@ -390,360 +395,370 @@
       {
         "symbol": "QDTE",
         "quantity": 28.0,
-        "market_value": 988.4,
+        "market_value": 1010.52,
         "account_name": "Schwab MARGIN",
         "account_number": "74501314"
       },
       {
         "symbol": "DX",
         "quantity": 125.0,
-        "market_value": 1566.25,
+        "market_value": 1655.0,
         "account_name": "Schwab MARGIN",
         "account_number": "74501314"
       }
     ]
   },
   "dividend_estimates": {
-    "E*TRADE IRA": 27048.321187650603,
-    "E*TRADE Taxable": 11117.503890516518,
-    "Schwab IRA": 7527.8047363999995,
-    "Schwab Individual": 546.172725
+    "E*TRADE IRA": 26545.350400000003,
+    "E*TRADE Taxable": 11509.165200000001,
+    "Schwab IRA": 13183.368,
+    "Schwab Individual": 598.3248000000001
   },
   "ticker_yields": {
-    "ABR": {
-      "yield": 10.0925,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 11.7,
+    "ECC": {
+      "yield": 27.05314009661836,
+      "dividend_amount": 0.42000000000000004,
+      "annual_dividend": 1.6800000000000002,
+      "payment_frequency": "monthly",
+      "last_price": 6.21,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:34"
-    },
-    "QDTE": {
-      "yield": 29.520679886685553,
-      "dividend_amount": 2.6052,
-      "annual_dividend": 10.4208,
-      "payment_frequency": "weekly",
-      "last_price": 35.3,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:35"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:21"
     },
     "PINS": {
       "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 35.03,
+      "last_price": 33.1,
       "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:35"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:21"
     },
-    "PDI": {
-      "yield": 13.3907,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 19.85,
+    "SOXL": {
+      "yield": 0.25115110925073253,
+      "dividend_amount": 0.03,
+      "annual_dividend": 0.12,
+      "payment_frequency": "monthly",
+      "last_price": 47.78,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:35"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:21"
     },
-    "OFS": {
-      "yield": 15.5963,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 8.735,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:35"
-    },
-    "NHS": {
-      "yield": 14.2707,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 7.6689,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:36"
-    },
-    "NCLH": {
+    "XMTR": {
       "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 26.65,
+      "last_price": 48.69,
       "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:36"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:22"
     },
-    "MRX": {
-      "yield": 1.7064,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 33.4,
+    "SVOL": {
+      "yield": 20.30456852791878,
+      "dividend_amount": 0.8999999999999999,
+      "annual_dividend": 3.5999999999999996,
+      "payment_frequency": "monthly",
+      "last_price": 17.73,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:36"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:22"
     },
-    "QQQI": {
-      "yield": 13.6391,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
+    "AMZU": {
+      "yield": 2.109921484653819,
+      "dividend_amount": 0.2217,
+      "annual_dividend": 0.8868,
       "payment_frequency": "quarterly",
-      "last_price": 53.91,
+      "last_price": 42.03,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:36"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:22"
     },
-    "RYLD": {
-      "yield": 12.3541,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 15.26,
+    "AGNC": {
+      "yield": 14.399999999999999,
+      "dividend_amount": 0.36,
+      "annual_dividend": 1.44,
+      "payment_frequency": "monthly",
+      "last_price": 10.0,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:36"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:23"
+    },
+    "EIC": {
+      "yield": 12.02775636083269,
+      "dividend_amount": 0.39,
+      "annual_dividend": 1.56,
+      "payment_frequency": "monthly",
+      "last_price": 12.97,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:23"
     },
     "SMCI": {
       "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 45.0,
+      "last_price": 51.96,
       "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:37"
-    },
-    "UGL": {
-      "yield": 0.0,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 41.33,
-      "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:37"
-    },
-    "SVOL": {
-      "yield": 18.6911,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 18.09,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:37"
-    },
-    "SOXL": {
-      "yield": 0.9222,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 29.3,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:37"
-    },
-    "SOUN": {
-      "yield": 0.0,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 14.12,
-      "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:37"
-    },
-    "SOFI": {
-      "yield": 0.0,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 26.55,
-      "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:38"
-    },
-    "MORT": {
-      "yield": 11.7621,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 11.1,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:38"
-    },
-    "MARA": {
-      "yield": 0.0,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 16.31,
-      "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:38"
-    },
-    "MAGS": {
-      "yield": 0.6871,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 62.93,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:38"
-    },
-    "BRSP": {
-      "yield": 10.7744,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 5.88,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:39"
-    },
-    "BITO": {
-      "yield": 53.7031,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 20.14,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:39"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:23"
     },
     "AVL": {
-      "yield": 0.8502,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
+      "yield": 0.8864526233359435,
+      "dividend_amount": 0.1415,
+      "annual_dividend": 0.566,
       "payment_frequency": "quarterly",
-      "last_price": 62.72,
+      "last_price": 63.85,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:39"
-    },
-    "AMZU": {
-      "yield": 2.7158,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 38.06,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:39"
-    },
-    "AGNC": {
-      "yield": 14.0762,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 10.18,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:39"
-    },
-    "ACP": {
-      "yield": 15.7627,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 5.89,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:40"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:23"
     },
     "CHMI": {
-      "yield": 20.1342,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
+      "yield": 16.877637130801688,
+      "dividend_amount": 0.1,
+      "annual_dividend": 0.4,
       "payment_frequency": "quarterly",
-      "last_price": 2.97,
+      "last_price": 2.37,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:40"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:24"
     },
-    "DSL": {
-      "yield": 10.4183,
+    "IBIT": {
+      "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 12.64,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:40"
+      "last_price": 62.3,
+      "has_dividend": false,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:24"
     },
-    "DX": {
-      "yield": 16.242,
+    "SMR": {
+      "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 12.53,
+      "last_price": 44.87,
+      "has_dividend": false,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:24"
+    },
+    "ACP": {
+      "yield": 16.69658886894075,
+      "dividend_amount": 0.23249999999999998,
+      "annual_dividend": 0.9299999999999999,
+      "payment_frequency": "monthly",
+      "last_price": 5.57,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:40"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:24"
+    },
+    "FOXA": {
+      "yield": 1.7324052590873935,
+      "dividend_amount": 0.28,
+      "annual_dividend": 1.12,
+      "payment_frequency": "quarterly",
+      "last_price": 64.65,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:24"
+    },
+    "RYLD": {
+      "yield": 11.875405580791695,
+      "dividend_amount": 0.4575,
+      "annual_dividend": 1.83,
+      "payment_frequency": "monthly",
+      "last_price": 15.41,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:25"
+    },
+    "MORT": {
+      "yield": 14.028985507246377,
+      "dividend_amount": 0.363,
+      "annual_dividend": 1.452,
+      "payment_frequency": "quarterly",
+      "last_price": 10.35,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:25"
     },
     "IBKR": {
-      "yield": 0.5052,
+      "yield": 0.45480386583285953,
+      "dividend_amount": 0.08,
+      "annual_dividend": 0.32,
+      "payment_frequency": "quarterly",
+      "last_price": 70.36,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:25"
+    },
+    "QDTE": {
+      "yield": 33.97506234413965,
+      "dividend_amount": 3.0654000000000003,
+      "annual_dividend": 12.261600000000001,
+      "payment_frequency": "weekly",
+      "last_price": 36.09,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:25"
+    },
+    "TSLL": {
+      "yield": 1.6583101207056639,
+      "dividend_amount": 0.0893,
+      "annual_dividend": 0.3572,
+      "payment_frequency": "quarterly",
+      "last_price": 21.54,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:26"
+    },
+    "BRSP": {
+      "yield": 12.4031007751938,
+      "dividend_amount": 0.16,
+      "annual_dividend": 0.64,
+      "payment_frequency": "quarterly",
+      "last_price": 5.16,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:26"
+    },
+    "XOMO": {
+      "yield": 37.44892703862661,
+      "dividend_amount": 1.0907,
+      "annual_dividend": 4.3628,
+      "payment_frequency": "weekly",
+      "last_price": 11.65,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:26"
+    },
+    "MRX": {
+      "yield": 1.9769357495881383,
+      "dividend_amount": 0.15,
+      "annual_dividend": 0.6,
+      "payment_frequency": "quarterly",
+      "last_price": 30.35,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:26"
+    },
+    "DX": {
+      "yield": 15.407854984894259,
+      "dividend_amount": 0.51,
+      "annual_dividend": 2.04,
+      "payment_frequency": "monthly",
+      "last_price": 13.24,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:27"
+    },
+    "NCLH": {
+      "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 63.7,
+      "last_price": 22.42,
+      "has_dividend": false,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:27"
+    },
+    "ABR": {
+      "yield": 11.892963330029731,
+      "dividend_amount": 0.3,
+      "annual_dividend": 1.2,
+      "payment_frequency": "quarterly",
+      "last_price": 10.09,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:40"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:27"
+    },
+    "NVDW": {
+      "yield": 49.695234359678366,
+      "dividend_amount": 6.3349,
+      "annual_dividend": 25.3396,
+      "payment_frequency": "weekly",
+      "last_price": 50.99,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:27"
+    },
+    "BITO": {
+      "yield": 55.63274336283186,
+      "dividend_amount": 2.5145999999999997,
+      "annual_dividend": 10.058399999999999,
+      "payment_frequency": "monthly",
+      "last_price": 18.08,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:28"
     },
     "HSAI": {
       "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 28.57,
+      "last_price": 23.73,
       "has_dividend": false,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:41"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:28"
     },
-    "EQT": {
-      "yield": 1.2363,
+    "DSL": {
+      "yield": 11.214953271028039,
+      "dividend_amount": 0.33,
+      "annual_dividend": 1.32,
+      "payment_frequency": "monthly",
+      "last_price": 11.77,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:28"
+    },
+    "MARA": {
+      "yield": 0.0,
       "dividend_amount": 0.0,
       "annual_dividend": 0.0,
       "payment_frequency": "quarterly",
-      "last_price": 50.94,
-      "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:41"
+      "last_price": 18.27,
+      "has_dividend": false,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:28"
     },
-    "EIC": {
-      "yield": 11.6766,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
-      "payment_frequency": "quarterly",
-      "last_price": 13.38,
+    "QQQI": {
+      "yield": 13.930115273775215,
+      "dividend_amount": 1.9335,
+      "annual_dividend": 7.734,
+      "payment_frequency": "monthly",
+      "last_price": 55.52,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:41"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:29"
     },
-    "ECC": {
-      "yield": 23.8298,
-      "dividend_amount": 0.0,
-      "annual_dividend": 0.0,
+    "OFS": {
+      "yield": 11.390284757118929,
+      "dividend_amount": 0.17,
+      "annual_dividend": 0.68,
       "payment_frequency": "quarterly",
-      "last_price": 7.02,
+      "last_price": 5.97,
       "has_dividend": true,
-      "dividend_source": "etrade_quote_api",
-      "last_updated": "2025-09-13 17:51:41"
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:29"
+    },
+    "PDI": {
+      "yield": 14.411764705882351,
+      "dividend_amount": 0.6615,
+      "annual_dividend": 2.646,
+      "payment_frequency": "monthly",
+      "last_price": 18.36,
+      "has_dividend": true,
+      "dividend_source": "etrade_quote_api_all_accounts",
+      "last_updated": "2025-11-01 11:03:29"
     }
   },
   "totals": {
-    "total_portfolio": 538248.3963,
-    "total_yearly_dividends": 46239.80253956712,
-    "total_monthly_dividends": 3853.3168782972602
+    "total_portfolio": 546812.4500000001,
+    "total_yearly_dividends": 51836.2084,
+    "total_monthly_dividends": 4319.684033333334
   }
 }

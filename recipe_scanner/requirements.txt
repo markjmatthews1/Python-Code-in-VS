@@ -1,0 +1,23 @@
+# Recipe Scanner Pro - Requirements
+
+# GUI Framework
+customtkinter==5.2.0
+pillow==10.1.0
+
+# OCR
+pytesseract==0.3.10
+
+# Data Management
+pandas==2.1.3
+
+# Windows Scanner Interface
+pywin32==306
+
+# PDF Generation
+reportlab==4.0.7
+
+# Executable Creation
+pyinstaller==6.2.0
+
+# Optional: GUI for PyInstaller
+# auto-py-to-exe==2.42.0

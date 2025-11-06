@@ -47,10 +47,31 @@ def copy_historical_data_directly():
     print(f"\n📋 Historical_Import: {hist_ws.max_row} rows x {hist_ws.max_column} columns")
     print(f"📋 Portfolio_History_import: {port_ws.max_row} rows x {port_ws.max_column} columns")
     
-    # Remove existing Estimated Income sheet
+    # Check if existing sheet has valuable data before removing
+    existing_sheet = None
+    has_valuable_data = False
+    
     if "Estimated Income 2025" in wb.sheetnames:
-        del wb["Estimated Income 2025"]
-        print("🗑️ Removed existing Estimated Income 2025 sheet")
+        existing_sheet = wb["Estimated Income 2025"]
+        
+        # Check if sheet has valuable data by looking for account rows with dividend values
+        for row in range(4, 8):  # Check account rows 4-7
+            account_name = existing_sheet.cell(row=row, column=1).value
+            annual_dividend = existing_sheet.cell(row=row, column=8).value
+            
+            if account_name and annual_dividend and isinstance(annual_dividend, (int, float)) and annual_dividend > 0:
+                has_valuable_data = True
+                print(f"✅ Found valuable data in row {row}: {account_name} = ${annual_dividend:,.2f}")
+                break
+        
+        if has_valuable_data:
+            print("🔒 Preserving existing Estimated Income 2025 sheet with valuable dividend data")
+            print("   💡 To force recreation, manually delete the sheet first")
+            return
+        else:
+            # Safe to delete - no valuable data found
+            del wb["Estimated Income 2025"]
+            print("🗑️ Removed existing Estimated Income 2025 sheet (no valuable data)")
     
     # Create new sheet
     ws = wb.create_sheet(title="Estimated Income 2025", index=0)

@@ -8,13 +8,14 @@ AI_VOLATILITY_THRESHOLD = 0.015  # 1.5% instead of 0.5% for ETFs
 AI_TARGET_PERCENT = 0.02         # 2% target
 AI_STOP_PERCENT = 0.01          # 1% stop loss
 
-# Volatility settings by asset type (LOWERED for intraday trading)
+# Volatility settings by asset type (OPTIMIZED for current market conditions - Oct 2025)
+# Lowered 75% from previous values to match observed intraday volatility
 VOLATILITY_THRESHOLDS = {
-    "leveraged_etf": 0.002,     # 0.2% for 3x leveraged ETFs (was 1.5%)
-    "regular_etf": 0.001,       # 0.1% for regular ETFs (was 0.8%)  
-    "individual_stock": 0.003,  # 0.3% for individual stocks (was 1.2%)
-    "crypto_etf": 0.005,        # 0.5% for crypto ETFs (was 2.0%)
-    "default": 0.002            # 0.2% default (was 1.0%)
+    "leveraged_etf": 0.0005,    # 0.05% for 3x leveraged ETFs (was 0.2%, reduced 75%)
+    "regular_etf": 0.0003,      # 0.03% for regular ETFs (was 0.1%, reduced 70%)  
+    "individual_stock": 0.0008, # 0.08% for individual stocks (was 0.3%, reduced 73%)
+    "crypto_etf": 0.001,        # 0.1% for crypto ETFs (was 0.5%, reduced 80%)
+    "default": 0.0005           # 0.05% default (was 0.2%, reduced 75%)
 }
 
 # Define which tickers are leveraged ETFs

@@ -1,6 +1,6 @@
 {
   "TQQQ": [
-    "2025-08-23T16:42:37.243405+00:00",
+    "2025-11-06T20:44:15.575461+00:00",
     {
       "institutional": [],
       "government": [],
@@ -8,7 +8,7 @@
     }
   ],
   "TECL": [
-    "2025-08-23T16:42:42.648157+00:00",
+    "2025-11-06T14:32:20.494117+00:00",
     {
       "institutional": [],
       "government": [],
@@ -30,7 +30,7 @@
     ]
   ],
   "MSTX": [
-    "2025-08-23T16:42:47.928677+00:00",
+    "2025-11-06T14:32:35.640992+00:00",
     {
       "institutional": [],
       "government": [],
@@ -38,7 +38,7 @@
     }
   ],
   "BITU": [
-    "2025-08-23T16:42:53.092326+00:00",
+    "2025-11-06T14:32:48.272268+00:00",
     {
       "institutional": [],
       "government": [],
@@ -60,7 +60,7 @@
     ]
   ],
   "ETHU": [
-    "2025-08-23T16:42:58.759780+00:00",
+    "2025-11-06T14:32:54.017826+00:00",
     {
       "institutional": [],
       "government": [],
@@ -68,7 +68,7 @@
     }
   ],
   "ROM": [
-    "2025-08-23T16:43:04.253041+00:00",
+    "2025-11-06T14:33:00.885822+00:00",
     {
       "institutional": [],
       "government": [],
@@ -84,7 +84,7 @@
     }
   ],
   "LABU": [
-    "2025-08-23T16:43:15.334940+00:00",
+    "2025-11-06T14:33:10.056479+00:00",
     {
       "institutional": [],
       "government": [],
@@ -92,7 +92,7 @@
     }
   ],
   "GDXU": [
-    "2025-08-23T16:43:20.599670+00:00",
+    "2025-10-27T11:46:00.675836+00:00",
     {
       "institutional": [],
       "government": [],
@@ -100,7 +100,7 @@
     }
   ],
   "NUGT": [
-    "2025-08-23T16:43:25.870867+00:00",
+    "2025-11-06T14:33:16.678177+00:00",
     {
       "institutional": [],
       "government": [],
@@ -108,7 +108,7 @@
     }
   ],
   "SMCX": [
-    "2025-08-23T16:43:28.456176+00:00",
+    "2025-10-27T11:46:13.544120+00:00",
     {
       "institutional": [],
       "government": [],
@@ -116,7 +116,7 @@
     }
   ],
   "CWEB": [
-    "2025-08-23T16:43:33.500728+00:00",
+    "2025-10-27T11:46:19.398692+00:00",
     {
       "institutional": [],
       "government": [],
@@ -124,7 +124,7 @@
     }
   ],
   "JNUG": [
-    "2025-08-23T16:43:38.510388+00:00",
+    "2025-10-27T11:46:24.839748+00:00",
     {
       "institutional": [],
       "government": [],
@@ -132,7 +132,7 @@
     }
   ],
   "NAIL": [
-    "2025-08-23T16:43:43.827647+00:00",
+    "2025-10-27T11:46:32.976458+00:00",
     {
       "institutional": [],
       "government": [],
@@ -140,7 +140,7 @@
     }
   ],
   "DFEN": [
-    "2025-08-23T16:43:49.500434+00:00",
+    "2025-11-06T14:33:22.507764+00:00",
     {
       "institutional": [],
       "government": [],
@@ -148,7 +148,7 @@
     }
   ],
   "ERX": [
-    "2025-08-23T16:43:54.783498+00:00",
+    "2025-11-06T14:33:28.201034+00:00",
     {
       "institutional": [],
       "government": [],
@@ -156,7 +156,7 @@
     }
   ],
   "SDOW": [
-    "2025-08-23T16:44:00.462315+00:00",
+    "2025-11-06T20:44:42.833702+00:00",
     {
       "institutional": [],
       "government": [],
@@ -178,7 +178,7 @@
     ]
   ],
   "BOIL": [
-    "2025-08-23T16:44:05.816253+00:00",
+    "2025-10-27T11:47:01.437437+00:00",
     {
       "institutional": [],
       "government": [],
@@ -186,7 +186,7 @@
     }
   ],
   "MSFU": [
-    "2025-08-23T16:44:11.612815+00:00",
+    "2025-11-06T14:33:44.306974+00:00",
     {
       "institutional": [],
       "government": [],
@@ -194,7 +194,7 @@
     }
   ],
   "AGQ": [
-    "2025-08-23T16:43:10.174619+00:00",
+    "2025-11-06T14:33:03.827135+00:00",
     {
       "institutional": [],
       "government": [],
@@ -213,7 +213,7 @@
     ]
   ],
   "QQQ": [
-    "2025-08-23T16:42:37.243405+00:00",
+    "2025-11-06T20:44:15.575461+00:00",
     {
       "institutional": [],
       "government": [],
@@ -221,7 +221,7 @@
     }
   ],
   "XLK": [
-    "2025-08-23T16:42:42.648157+00:00",
+    "2025-11-06T14:32:20.494117+00:00",
     {
       "institutional": [],
       "government": [],
@@ -229,58 +229,58 @@
     }
   ],
   "MSFT": [
-    "2025-08-23T16:42:47.928677+00:00",
+    "2025-11-06T14:32:35.640992+00:00",
     {
       "institutional": [],
       "government": [],
       "insider": [
         {
-          "change": -89,
+          "change": -8089,
           "currency": "",
-          "filingDate": "2025-08-18",
-          "id": "0001062993-25-014619",
+          "filingDate": "2025-11-04",
+          "id": "0000789019-25-000063",
+          "isDerivative": false,
+          "name": "SMITH BRADFORD L",
+          "share": 461597,
+          "source": "sec",
+          "symbol": "MSFT",
+          "transactionCode": "S",
+          "transactionDate": "2025-11-03",
+          "transactionPrice": 519.2096
+        },
+        {
+          "change": -30411,
+          "currency": "",
+          "filingDate": "2025-11-04",
+          "id": "0000789019-25-000063",
+          "isDerivative": false,
+          "name": "SMITH BRADFORD L",
+          "share": 469686,
+          "source": "sec",
+          "symbol": "MSFT",
+          "transactionCode": "S",
+          "transactionDate": "2025-11-03",
+          "transactionPrice": 518.4907
+        },
+        {
+          "change": -32,
+          "currency": "",
+          "filingDate": "2025-10-15",
+          "id": "0000789019-25-000061",
           "isDerivative": false,
           "name": "Coleman Amy",
-          "share": 42453,
+          "share": 50250,
           "source": "sec",
           "symbol": "MSFT",
           "transactionCode": "F",
-          "transactionDate": "2025-08-15",
-          "transactionPrice": 522.48
-        },
-        {
-          "change": -2850,
-          "currency": "",
-          "filingDate": "2025-08-13",
-          "id": "0001062993-25-014319",
-          "isDerivative": false,
-          "name": "Numoto Takeshi",
-          "share": 39111,
-          "source": "sec",
-          "symbol": "MSFT",
-          "transactionCode": "S",
-          "transactionDate": "2025-08-12",
-          "transactionPrice": 528.56
-        },
-        {
-          "change": -2000,
-          "currency": "",
-          "filingDate": "2025-08-13",
-          "id": "0001062993-25-014319",
-          "isDerivative": false,
-          "name": "Numoto Takeshi",
-          "share": 41930,
-          "source": "sec",
-          "symbol": "MSFT",
-          "transactionCode": "S",
-          "transactionDate": "2025-08-12",
-          "transactionPrice": 525.555
+          "transactionDate": "2025-10-15",
+          "transactionPrice": 513.57
         }
       ]
     }
   ],
   "BTC-USD": [
-    "2025-08-23T16:42:53.092326+00:00",
+    "2025-11-06T14:32:48.272268+00:00",
     {
       "institutional": [],
       "government": [],
@@ -288,7 +288,7 @@
     }
   ],
   "ETH-USD": [
-    "2025-08-23T16:42:58.759780+00:00",
+    "2025-11-06T14:32:54.017826+00:00",
     {
       "institutional": [],
       "government": [],
@@ -347,7 +347,7 @@
     }
   ],
   "SILVER": [
-    "2025-08-23T16:43:10.174619+00:00",
+    "2025-11-06T14:33:03.827135+00:00",
     {
       "institutional": [],
       "government": [],
@@ -355,7 +355,7 @@
     }
   ],
   "XBI": [
-    "2025-08-23T16:43:15.334940+00:00",
+    "2025-11-06T14:33:10.056479+00:00",
     {
       "institutional": [],
       "government": [],
@@ -363,7 +363,7 @@
     }
   ],
   "GDX": [
-    "2025-08-23T16:43:20.599670+00:00",
+    "2025-11-06T14:33:16.678177+00:00",
     {
       "institutional": [],
       "government": [],
@@ -371,58 +371,58 @@
     }
   ],
   "SMCI": [
-    "2025-08-23T16:43:28.456176+00:00",
+    "2025-10-27T11:46:13.544120+00:00",
     {
       "institutional": [],
       "government": [],
       "insider": [
         {
-          "change": -1480,
+          "change": -25000,
           "currency": "",
-          "filingDate": "2025-08-12",
-          "id": "0001777404-25-000005",
+          "filingDate": "2025-09-17",
+          "id": "0001777404-25-000011",
           "isDerivative": true,
           "name": "WEIGAND DAVID E",
-          "share": 16350,
+          "share": 25000,
           "source": "sec",
           "symbol": "SMCI",
           "transactionCode": "M",
-          "transactionDate": "2025-08-10",
+          "transactionDate": "2025-09-15",
           "transactionPrice": 0
         },
         {
-          "change": -2670,
+          "change": -25000,
           "currency": "",
-          "filingDate": "2025-08-12",
-          "id": "0001777404-25-000005",
-          "isDerivative": true,
-          "name": "WEIGAND DAVID E",
-          "share": 8030,
-          "source": "sec",
-          "symbol": "SMCI",
-          "transactionCode": "M",
-          "transactionDate": "2025-08-10",
-          "transactionPrice": 0
-        },
-        {
-          "change": -752,
-          "currency": "",
-          "filingDate": "2025-08-12",
-          "id": "0001777404-25-000005",
+          "filingDate": "2025-09-17",
+          "id": "0001777404-25-000011",
           "isDerivative": false,
           "name": "WEIGAND DAVID E",
           "share": 100188,
           "source": "sec",
           "symbol": "SMCI",
-          "transactionCode": "F",
-          "transactionDate": "2025-08-10",
-          "transactionPrice": 44.6
+          "transactionCode": "S",
+          "transactionDate": "2025-09-15",
+          "transactionPrice": 45.14
+        },
+        {
+          "change": 25000,
+          "currency": "",
+          "filingDate": "2025-09-17",
+          "id": "0001777404-25-000011",
+          "isDerivative": false,
+          "name": "WEIGAND DAVID E",
+          "share": 125188,
+          "source": "sec",
+          "symbol": "SMCI",
+          "transactionCode": "M",
+          "transactionDate": "2025-09-15",
+          "transactionPrice": 5.304
         }
       ]
     }
   ],
   "KWEB": [
-    "2025-08-23T16:43:33.500728+00:00",
+    "2025-10-27T11:46:19.398692+00:00",
     {
       "institutional": [],
       "government": [],
@@ -430,7 +430,7 @@
     }
   ],
   "GDXJ": [
-    "2025-08-23T16:43:38.510388+00:00",
+    "2025-10-27T11:46:24.839748+00:00",
     {
       "institutional": [],
       "government": [],
@@ -481,7 +481,7 @@
     }
   ],
   "XHB": [
-    "2025-08-23T16:43:43.827647+00:00",
+    "2025-10-27T11:46:32.976458+00:00",
     {
       "institutional": [],
       "government": [],
@@ -489,7 +489,7 @@
     }
   ],
   "ITA": [
-    "2025-08-23T16:43:49.500434+00:00",
+    "2025-11-06T14:33:22.507764+00:00",
     {
       "institutional": [],
       "government": [],
@@ -497,7 +497,7 @@
     }
   ],
   "XLE": [
-    "2025-08-23T16:43:54.783498+00:00",
+    "2025-11-06T14:33:28.201034+00:00",
     {
       "institutional": [],
       "government": [],
@@ -505,7 +505,7 @@
     }
   ],
   "DIA": [
-    "2025-08-23T16:44:00.462315+00:00",
+    "2025-11-06T20:44:42.833702+00:00",
     {
       "institutional": [],
       "government": [],
@@ -513,7 +513,7 @@
     }
   ],
   "UNG": [
-    "2025-08-23T16:44:05.816253+00:00",
+    "2025-10-27T11:47:01.437437+00:00",
     {
       "institutional": [],
       "government": [],
@@ -521,7 +521,7 @@
     }
   ],
   "TSLT": [
-    "2025-08-23T16:44:14.632933+00:00",
+    "2025-11-06T14:33:47.009705+00:00",
     {
       "institutional": [],
       "government": [],
@@ -529,58 +529,58 @@
     }
   ],
   "AMD": [
-    "2025-08-23T16:44:17.446576+00:00",
+    "2025-11-06T20:44:51.530757+00:00",
     {
       "institutional": [],
       "government": [],
       "insider": [
         {
-          "change": 2979,
+          "change": -16800,
           "currency": "",
-          "filingDate": "2025-08-19",
-          "id": "0000002488-25-000144",
+          "filingDate": "2025-10-17",
+          "id": "0000002488-25-000159",
           "isDerivative": true,
-          "name": "Carter Philip Matthew",
-          "share": 2979,
+          "name": "Papermaster Mark D",
+          "share": 17108,
           "source": "sec",
           "symbol": "AMD",
-          "transactionCode": "A",
-          "transactionDate": "2025-08-15",
+          "transactionCode": "M",
+          "transactionDate": "2025-10-15",
           "transactionPrice": 0
         },
         {
-          "change": 993,
+          "change": -200,
           "currency": "",
-          "filingDate": "2025-08-19",
-          "id": "0000002488-25-000144",
-          "isDerivative": true,
-          "name": "Carter Philip Matthew",
-          "share": 993,
+          "filingDate": "2025-10-17",
+          "id": "0000002488-25-000159",
+          "isDerivative": false,
+          "name": "Papermaster Mark D",
+          "share": 1714505,
           "source": "sec",
           "symbol": "AMD",
-          "transactionCode": "A",
-          "transactionDate": "2025-08-15",
-          "transactionPrice": 0
+          "transactionCode": "S",
+          "transactionDate": "2025-10-15",
+          "transactionPrice": 226.17
         },
         {
-          "change": 7334,
+          "change": -5516,
           "currency": "",
-          "filingDate": "2025-08-19",
-          "id": "0000002488-25-000140",
-          "isDerivative": true,
-          "name": "GUIDO PHILIP",
-          "share": 7334,
+          "filingDate": "2025-10-17",
+          "id": "0000002488-25-000159",
+          "isDerivative": false,
+          "name": "Papermaster Mark D",
+          "share": 1714705,
           "source": "sec",
           "symbol": "AMD",
-          "transactionCode": "A",
-          "transactionDate": "2025-08-15",
-          "transactionPrice": 0
+          "transactionCode": "S",
+          "transactionDate": "2025-10-15",
+          "transactionPrice": 225.59
         }
       ]
     }
   ],
   "SSO": [
-    "2025-08-23T16:44:20.900029+00:00",
+    "2025-11-06T14:33:52.861429+00:00",
     {
       "institutional": [],
       "government": [],
@@ -588,7 +588,7 @@
     }
   ],
   "SDS": [
-    "2025-08-23T16:44:23.838583+00:00",
+    "2025-11-06T14:33:40.507973+00:00",
     {
       "institutional": [],
       "government": [],
@@ -596,7 +596,63 @@
     }
   ],
   "NVDL": [
-    "2025-08-23T16:43:07.187715+00:00",
+    "2025-11-06T14:32:41.808359+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "UPRO": [
+    "2025-11-06T20:44:48.579546+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "SPYI": [
+    "2025-10-27T11:47:32.231062+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "SOXL": [
+    "2025-11-06T20:44:11.965418+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "TNA": [
+    "2025-11-06T14:32:32.259048+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "FNGU": [
+    "2025-11-06T14:32:45.307502+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "UMDD": [
+    "2025-11-06T14:33:55.997299+00:00",
+    {
+      "institutional": [],
+      "government": [],
+      "insider": []
+    }
+  ],
+  "HIBL": [
+    "2025-11-06T14:33:59.547664+00:00",
     {
       "institutional": [],
       "government": [],

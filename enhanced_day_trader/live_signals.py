@@ -208,7 +208,9 @@ class LiveTradeSignalGenerator:
             
         signal_strength = self.calculate_signal_strength(data)
         
-        if signal_strength < self.min_signal_strength:
+        # IMPROVEMENT #3: Require stronger signals (0.75 -> 0.85)
+        # This filters out marginal setups that tend to fail
+        if signal_strength < 0.85:
             return None
             
         latest = data.iloc[-1]
@@ -222,16 +224,35 @@ class LiveTradeSignalGenerator:
             logger.debug(f"Skipping {symbol}: Price ${current_price:.2f} below SMA20 ${sma_20:.2f}")
             return None
         
-        # FIX #5: TIME FILTER - Only trade morning hours (9:30 AM - 12:00 PM ET)
-        # Afternoon trading has only 16.7% win rate vs 47.4% in morning
+        # IMPROVEMENT #5: Add momentum filters
+        # Only trade when price shows real strength (not just technical indicators)
+        
+        # Filter 5a: Price must be above yesterday's close (bullish momentum)
+        if len(data) >= 2:
+            yesterday_close = data.iloc[-2]['Close']
+            if current_price <= yesterday_close:
+                logger.debug(f"Skipping {symbol}: Price ${current_price:.2f} not above yesterday's close ${yesterday_close:.2f}")
+                return None
+        
+        # Filter 5b: Today's volume should be above average (confirms conviction)
+        if 'Volume' in data.columns and len(data) >= 20:
+            avg_volume = data['Volume'].iloc[-20:].mean()
+            current_volume = latest['Volume']
+            if pd.notna(avg_volume) and pd.notna(current_volume):
+                if current_volume < avg_volume * 0.8:  # At least 80% of average
+                    logger.debug(f"Skipping {symbol}: Volume {current_volume:,.0f} below average {avg_volume:,.0f}")
+                    return None
+        
+        # IMPROVEMENT #2: Delay entry to avoid opening range volatility (9:30 -> 9:45 AM)
+        # Opening range (9:30-9:45) has high volatility and false breakouts
         from datetime import datetime
         current_time = datetime.now()
         current_hour = current_time.hour
         current_minute = current_time.minute
         
-        # Skip if before 9:30 AM or after 12:00 PM
-        if current_hour < 9 or (current_hour == 9 and current_minute < 30):
-            logger.debug(f"Skipping {symbol}: Before market open (9:30 AM)")
+        # Skip if before 9:45 AM or after 12:00 PM
+        if current_hour < 9 or (current_hour == 9 and current_minute < 45):
+            logger.debug(f"Skipping {symbol}: Before 9:45 AM (avoid opening range volatility)")
             return None
         if current_hour >= 12:
             logger.debug(f"Skipping {symbol}: After 12:00 PM (afternoon trades have 16.7% win rate)")
@@ -242,11 +263,11 @@ class LiveTradeSignalGenerator:
         macd = latest['MACD']
         macd_signal = latest['MACD_signal']
         
-        # FIX #6: ATR-BASED STOP LOSSES - Use 2x ATR for stops (wider, more forgiving)
-        # This prevents stops being hit on normal market noise
-        atr_pct = (atr / current_price)  # ATR as percentage of price
-        stop_distance_pct = max(atr_pct * 2.0, 0.006)  # At least 0.6%, or 2x ATR (whichever is larger)
-        target_distance_pct = stop_distance_pct * 2.0  # Maintain 2:1 risk/reward
+        # IMPROVEMENT #1: Widen stops to 0.8% (was 0.4%)
+        # Previous stops were too tight - normal market noise triggered them
+        # Now using 0.8% stop with 1.6% target = 2:1 risk/reward (unchanged)
+        stop_distance_pct = 0.008  # 0.8% stop loss
+        target_distance_pct = 0.016  # 1.6% take profit (2:1 R/R)
         
         # FIX #1: DISABLE SHORT TRADES - They have 25% win rate vs 54.5% for LONG
         # Only generate LONG (BUY) signals

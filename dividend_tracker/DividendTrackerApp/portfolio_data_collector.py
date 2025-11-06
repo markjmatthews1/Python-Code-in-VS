@@ -131,11 +131,8 @@ class PortfolioDataCollector:
             print("   📋 Processing Schwab accounts...")
             schwab_tickers_added = False
             
-            # Skip Schwab API direct call due to manual OAuth requirement
-            print("   ⚠️ Skipping Schwab API direct access (requires manual OAuth)")
-            
-            # Use fallback: Extract Schwab tickers from successful balance collection system
-            print("   📋 Using Schwab ticker extraction from balance collection system...")
+            # Use centralized Schwab auth system from main directory
+            print("   📋 Using centralized Schwab authentication (tokens.json)...")
             try:
                 schwab_data = self.get_schwab_data()
                 for account_name, positions in schwab_data.get('positions', {}).items():
@@ -216,25 +213,151 @@ class PortfolioDataCollector:
                             dividend_amount = float(all_data.get('dividendAmount', 0))
                             last_price = float(all_data.get('lastTrade', 0))
                             
-                            # Handle weekly payers (like QDTE, NVDW, MSFW)
+                            # Handle weekly payers - check for weekly dividend field
                             weekly_dividend = float(all_data.get('dividend', 0))
                             if weekly_dividend == 0:
                                 weekly_dividend = float(all_data.get('declaredDividend', 0))
                             
-                            # Check if this is a weekly payer
-                            weekly_tickers = ['QDTE', 'NVDW', 'MSFW', 'QQQI']  # Add known weekly payers
-                            if ticker in weekly_tickers and weekly_dividend > 0:
-                                annual_dividend = weekly_dividend * 52  # 52 weeks per year
-                                payment_frequency = 'weekly'
-                                if last_price > 0:
-                                    dividend_yield = (annual_dividend / last_price) * 100
+                            # Auto-detect payment frequency
+                            # NOTE: E*TRADE's "yield" field is UNRELIABLE for weekly payers
+                            # It often reports monthly or partial yield instead of annual for weekly payers
+                            is_weekly_payer = False
+                            payment_frequency = 'quarterly'  # Default
+                            
+                            # Get E*TRADE's reported yield first
+                            reported_yield = float(all_data.get('yield', 0))
+                            if reported_yield == 0:
+                                reported_yield = float(all_data.get('dividendYield', 0))
+                            
+                            # Check ticker name/description for "WEEKLY" keywords
+                            company_name = all_data.get('companyName', '').upper()
+                            symbol_desc = all_data.get('symbolDescription', '').upper()
+                            ticker_upper = ticker.upper()
+                            
+                            # Known frequency overrides (to prevent misdetection)
+                            known_weekly_tickers = ['QDTE', 'XDTE', 'YMAX', 'JEPQ', 'JEPI']
+                            known_monthly_tickers = ['BITO', 'RYLD', 'SVOL', 'QQQI', 'PDI', 'EIC', 'ACP', 'DSL', 'ECC', 'DX', 'AGNC', 'SOXL']
+                            known_quarterly_tickers = ['CHMI', 'ABR', 'OFS', 'MORT', 'BRSP', 'MRX', 'AMZU', 'AVL', 'FOXA', 'IBKR']
+                            
+                            is_known_weekly = (
+                                any(kw in company_name or kw in symbol_desc or kw in ticker_upper 
+                                    for kw in ['WEEKLY', 'WEEK', 'WEEKLYPAY']) or
+                                ticker_upper in known_weekly_tickers
+                            )
+                            
+                            is_known_monthly = ticker_upper in known_monthly_tickers
+                            is_known_quarterly = ticker_upper in known_quarterly_tickers
+                            
+                            if weekly_dividend > 0 and last_price > 0:
+                                # Calculate what the yield WOULD be for each frequency
+                                weekly_calc = (weekly_dividend * 52 / last_price) * 100
+                                monthly_calc = (weekly_dividend * 12 / last_price) * 100
+                                quarterly_calc = (weekly_dividend * 4 / last_price) * 100
+                                annual_calc = (weekly_dividend * 1 / last_price) * 100
+                                
+                                # PRIORITY 0: Check known frequency overrides first
+                                if is_known_weekly:
+                                    is_weekly_payer = True
+                                    payment_frequency = 'weekly'
+                                    annual_dividend = weekly_dividend * 52
+                                    dividend_yield = weekly_calc
+                                    print(f"      📊 {ticker} WEEKLY (known): ${weekly_dividend:.4f}/week × 52 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                
+                                elif is_known_monthly:
+                                    payment_frequency = 'monthly'
+                                    annual_dividend = weekly_dividend * 12
+                                    dividend_yield = monthly_calc
+                                    print(f"      📊 {ticker} MONTHLY (known): ${weekly_dividend:.4f}/month × 12 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                
+                                elif is_known_quarterly:
+                                    payment_frequency = 'quarterly'
+                                    annual_dividend = weekly_dividend * 4
+                                    dividend_yield = quarterly_calc
+                                    print(f"      📊 {ticker} QUARTERLY (known): ${weekly_dividend:.4f}/quarter × 4 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                
+                                # PRIORITY 1: If annualDividend = 0, need to determine frequency
+                                elif annual_dividend == 0:
+                                    # Strategy: Match calculated yields to E*TRADE's reported yield
+                                    # Test all 4 frequencies and pick the best match
+                                    
+                                    if reported_yield > 0:
+                                        differences = {
+                                            'weekly': abs(weekly_calc - reported_yield),
+                                            'monthly': abs(monthly_calc - reported_yield),
+                                            'quarterly': abs(quarterly_calc - reported_yield),
+                                            'annual': abs(annual_calc - reported_yield)
+                                        }
+                                        
+                                        best_match = min(differences, key=differences.get)
+                                        
+                                        # Only trust the match if difference is < 1% (tolerance)
+                                        if differences[best_match] < 1.0:
+                                            payment_frequency = best_match
+                                            
+                                            if best_match == 'weekly':
+                                                is_weekly_payer = True
+                                                annual_dividend = weekly_dividend * 52
+                                                dividend_yield = weekly_calc
+                                            elif best_match == 'monthly':
+                                                annual_dividend = weekly_dividend * 12
+                                                dividend_yield = monthly_calc
+                                            elif best_match == 'quarterly':
+                                                annual_dividend = weekly_dividend * 4
+                                                dividend_yield = quarterly_calc
+                                            elif best_match == 'annual':
+                                                annual_dividend = weekly_dividend * 1
+                                                dividend_yield = annual_calc
+                                            
+                                            print(f"      📊 {ticker} {payment_frequency.upper()}: ${weekly_dividend:.4f}/{payment_frequency} → ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                        else:
+                                            # No good match - if weekly_calc > 20%, assume weekly
+                                            if weekly_calc > 20:
+                                                is_weekly_payer = True
+                                                payment_frequency = 'weekly'
+                                                annual_dividend = weekly_dividend * 52
+                                                dividend_yield = weekly_calc
+                                                print(f"      📊 {ticker} WEEKLY (high yield): ${weekly_dividend:.4f}/week × 52 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                            else:
+                                                # Default to reported yield and quarterly
+                                                payment_frequency = 'quarterly'
+                                                annual_dividend = weekly_dividend * 4
+                                                dividend_yield = quarterly_calc
+                                                print(f"      📊 {ticker} QUARTERLY (default): ${weekly_dividend:.4f}/quarter × 4 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                    else:
+                                        # No reported yield - use high yield heuristic
+                                        if weekly_calc > 20:
+                                            is_weekly_payer = True
+                                            payment_frequency = 'weekly'
+                                            annual_dividend = weekly_dividend * 52
+                                            dividend_yield = weekly_calc
+                                            print(f"      📊 {ticker} WEEKLY (no reported yield): ${weekly_dividend:.4f}/week × 52 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                        else:
+                                            # Default to quarterly
+                                            payment_frequency = 'quarterly'
+                                            annual_dividend = weekly_dividend * 4
+                                            dividend_yield = quarterly_calc
+                                            print(f"      📊 {ticker} QUARTERLY (no reported yield): ${weekly_dividend:.4f}/quarter × 4 = ${annual_dividend:.2f}/year = {dividend_yield:.2f}% yield")
+                                
+                                # PRIORITY 2: We have annualDividend populated - trust E*TRADE
+                                elif reported_yield > 0:
+                                    # Use E*TRADE's reported yield
+                                    dividend_yield = reported_yield
+                                    print(f"      📊 {ticker}: {dividend_yield:.2f}% yield (from E*TRADE), ${annual_dividend:.2f}/year")
+                                
+                                else:
+                                    # Have annualDividend but no reported yield - use annualDividend
+                                    if last_price > 0:
+                                        dividend_yield = (annual_dividend / last_price) * 100
+                                        print(f"      📊 {ticker}: {dividend_yield:.2f}% yield (calculated), ${annual_dividend:.2f}/year")
+                            
+                            if is_weekly_payer:
                                 print(f"      📊 {ticker} WEEKLY: ${weekly_dividend:.3f}/week × 52 = ${annual_dividend:.3f}/year = {dividend_yield:.2f}% yield")
                             
                             # Try alternative dividend field names if needed
                             elif dividend_yield == 0:
                                 dividend_yield = float(all_data.get('dividendYield', 0))
                             
-                            if annual_dividend == 0 and ticker not in weekly_tickers:
+                            if annual_dividend == 0 and not is_weekly_payer:
                                 annual_dividend = float(all_data.get('annualDiv', 0))
                                 if annual_dividend == 0:
                                     annual_dividend = float(all_data.get('ttmDividend', 0))
@@ -938,21 +1061,31 @@ class PortfolioDataCollector:
                 yield_info = ticker_yields.get(symbol, {})
                 
                 if yield_info:
-                    # Try different yield field names from the database
-                    dividend_yield = (
-                        yield_info.get('dividend_yield') or
-                        yield_info.get('yield') or
-                        yield_info.get('annual_dividend_yield') or
-                        0.0
-                    )
+                    # CORRECT METHOD: Use shares × annual_dividend_per_share
+                    # This matches how E*TRADE and Schwab calculate estimated income
+                    annual_dividend_per_share = yield_info.get('annual_dividend', 0.0)
                     
-                    if dividend_yield > 0:
-                        # Calculate annual dividend based on market value and yield percentage
-                        annual_dividend = market_value * (dividend_yield / 100)
+                    # Fallback to calculated annual dividend from yield if not available
+                    if annual_dividend_per_share == 0:
+                        dividend_yield_calc = (
+                            yield_info.get('dividend_yield') or
+                            yield_info.get('yield') or
+                            yield_info.get('annual_dividend_yield') or
+                            0.0
+                        )
+                        if dividend_yield_calc > 0 and dividend_yield_calc <= 100:
+                            # Calculate annual dividend per share from yield and price
+                            last_price = yield_info.get('last_price', 0)
+                            if last_price > 0:
+                                annual_dividend_per_share = (last_price * dividend_yield_calc) / 100
+                    
+                    if annual_dividend_per_share > 0:
+                        # Calculate: shares × annual dividend per share
+                        annual_dividend = quantity * annual_dividend_per_share
                         account_dividend += annual_dividend
-                        print(f"   📊 {symbol}: {quantity} × {dividend_yield}% = ${annual_dividend:.2f}/year")
+                        print(f"   📊 {symbol}: {quantity} × ${annual_dividend_per_share:.3f}/share = ${annual_dividend:.2f}/year")
                     else:
-                        print(f"   📊 {symbol}: {quantity} shares - No dividend yield available")
+                        print(f"   📊 {symbol}: {quantity} shares - No dividend data available")
                 else:
                     # Try to get yield from any available source or use conservative estimate
                     print(f"   ⚠️ {symbol}: Not in E*TRADE IRA yield database - using conservative estimate")
