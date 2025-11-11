@@ -210,31 +210,34 @@ class RotationEngine:
         """
         Find tickers eligible for the next rotation based on timing
         
-        Returns list of dicts with ticker info and buy deadline
+        Returns ONLY the next available ex-date group (must buy day before ex-date)
+        Logic: Shows next group where deadline hasn't passed yet
+        Example: Monday 11am -> Show Wednesday group (must buy Tuesday)
+                 Tuesday 4pm -> Too late for Wednesday, show Thursday group
         """
         current_time = self.get_current_time_et()
         current_day = current_time.strftime('%A')  # Monday, Tuesday, etc.
         
         all_tickers = self.settings_manager.get_all_tickers_info()
-        targets = []
+        all_targets = []
         
+        # First, calculate all potential targets with their deadlines
         for ticker, info in all_tickers.items():
             # Calculate next ex-dividend date
             next_ex_div = self.calculate_next_ex_dividend_date(ticker)
             if not next_ex_div:
                 continue
             
-            # Calculate buy deadline
+            # Calculate buy deadline (must purchase day before ex-date)
             buy_deadline, deadline_desc = self.calculate_buy_deadline(ticker)
             if not buy_deadline:
                 continue
             
-            # Check if this is a near-term opportunity (within next 3 days)
-            days_until_deadline = (buy_deadline - current_time).days
-            
-            if days_until_deadline <= 2 and buy_deadline > current_time:
-                # This is an upcoming rotation opportunity
-                targets.append({
+            # Only include if deadline hasn't passed
+            if buy_deadline > current_time:
+                days_until_deadline = (buy_deadline - current_time).days
+                
+                all_targets.append({
                     'ticker': ticker,
                     'name': info.get('name', ''),
                     'ex_dividend_day': info.get('ex_dividend_day', ''),
@@ -247,10 +250,23 @@ class RotationEngine:
                     'is_urgent': days_until_deadline == 0,  # Today is the deadline
                 })
         
-        # Sort by urgency (closest deadline first)
-        targets.sort(key=lambda x: x['buy_deadline'])
+        if not all_targets:
+            return []
         
-        return targets
+        # Sort by deadline (earliest first)
+        all_targets.sort(key=lambda x: x['buy_deadline'])
+        
+        # Get the earliest ex-dividend date (next available group)
+        earliest_ex_date = all_targets[0]['next_ex_div_date'].date()
+        
+        # Filter to only show tickers with this ex-dividend date
+        # This ensures we only show ONE group at a time (the next available)
+        next_group_targets = [
+            t for t in all_targets 
+            if t['next_ex_div_date'].date() == earliest_ex_date
+        ]
+        
+        return next_group_targets
     
     def analyze_holdings(self, holdings: List[Dict]) -> Dict:
         """
@@ -270,16 +286,27 @@ class RotationEngine:
         
         Returns categorized holdings:
         {
-            'ready_to_sell': [...],
-            'must_hold': [...],
-            'hold_for_nav': [...]
+            'ready_to_sell': [...],    # At/past ex-date AND not in next rotation group
+            'must_hold': [...],          # Waiting for ex-date OR NAV >= purchase AND in next rotation group
+            'hold_for_nav': [...]        # NAV < purchase AND not in next rotation group
         }
+        
+        Logic:
+        - Ready to Sell: Past ex-date, not in next rotation group (can sell to free capital)
+        - Must Hold: Either waiting for ex-date OR in next rotation group (keep for upcoming dividend)
+        - Hold for NAV: Below purchase price, not in next rotation group (wait for recovery)
         """
         categorized = {
             'ready_to_sell': [],
             'must_hold': [],
             'hold_for_nav': []
         }
+        
+        # Get next rotation targets to check if ticker is in upcoming group
+        next_targets = self.find_next_rotation_targets()
+        next_rotation_tickers = set(t['ticker'] for t in next_targets)
+        
+        current_time = self.get_current_time_et()
         
         for holding in holdings:
             ticker = holding['ticker']
@@ -293,12 +320,73 @@ class RotationEngine:
             # Add eligibility info to holding
             holding_with_status = {**holding, **eligibility}
             
-            if eligibility['can_sell']:
-                categorized['ready_to_sell'].append(holding_with_status)
-            elif eligibility['nav_status'] == 'loss':
-                categorized['hold_for_nav'].append(holding_with_status)
-            else:
-                categorized['must_hold'].append(holding_with_status)
+            # Check if ticker is in next rotation group
+            in_next_rotation = ticker in next_rotation_tickers
+            
+            # Calculate NAV
+            nav_pct = ((holding['current_price'] - holding['purchase_price']) / holding['purchase_price']) * 100
+            
+            # Determine if this holding has passed through an ex-dividend cycle
+            # Check if at least 7 days have passed since purchase (one weekly cycle)
+            days_since_purchase = (current_time - holding['purchase_date']).days
+            
+            # Get next ex-dividend date
+            next_ex_div = self.calculate_next_ex_dividend_date(ticker)
+            
+            # A holding has "passed ex-date" if:
+            # 1. Held for at least 2 days (enough time to go ex-dividend)
+            # 2. Next ex-div is in the future (meaning we already passed a previous one)
+            # 3. Purchase date was before the most recent ex-div
+            past_ex_date = False
+            if next_ex_div and days_since_purchase >= 2:
+                # If next ex-div is in the future, check if purchase was before last week's ex-div
+                # For weekly payers, if we're 2+ days past purchase and next ex-div is future,
+                # we likely already went through an ex-dividend cycle
+                ticker_info = self.settings_manager.get_ticker_info(ticker)
+                last_ex_date_str = ticker_info.get('last_ex_date', '')
+                
+                if last_ex_date_str:
+                    try:
+                        last_ex_date = datetime.strptime(last_ex_date_str, '%Y-%m-%d')
+                        last_ex_date = self.eastern.localize(last_ex_date.replace(hour=9, minute=30))
+                        
+                        # If purchase was before or on the last known ex-date, we've passed it
+                        if holding['purchase_date'].date() <= last_ex_date.date() and current_time.date() > last_ex_date.date():
+                            past_ex_date = True
+                    except:
+                        pass
+            
+            # Categorization logic based on user requirements:
+            # NOTE: A ticker can appear in MULTIPLE categories!
+            
+            # READY TO SELL: At/beyond ex-date AND not in next rotation group
+            if past_ex_date and not in_next_rotation:
+                ready_reason = f"✅ Past ex-date, not in next rotation (NAV {nav_pct:+.2f}%)"
+                holding_ready = {**holding_with_status, 'reason': ready_reason}
+                categorized['ready_to_sell'].append(holding_ready)
+            
+            # MUST HOLD: Waiting for ex-date OR in next rotation group OR below purchase price
+            if in_next_rotation:
+                if next_ex_div:
+                    hold_reason = f"🎯 In next rotation group (ex-div {next_ex_div.strftime('%a %m/%d')})"
+                else:
+                    hold_reason = f"🎯 In next rotation group - Hold for upcoming dividend"
+                holding_must_hold = {**holding_with_status, 'reason': hold_reason}
+                categorized['must_hold'].append(holding_must_hold)
+            elif not past_ex_date and next_ex_div:
+                hold_reason = f"🔒 Waiting for ex-dividend on {next_ex_div.strftime('%a %m/%d')}"
+                holding_must_hold = {**holding_with_status, 'reason': hold_reason}
+                categorized['must_hold'].append(holding_must_hold)
+            elif nav_pct < 0:
+                hold_reason = f"📉 Below purchase price ({nav_pct:.2f}%) - Hold to recover"
+                holding_must_hold = {**holding_with_status, 'reason': hold_reason}
+                categorized['must_hold'].append(holding_must_hold)
+            
+            # HOLD FOR NAV: NAV < purchase price AND not in next rotation group
+            if nav_pct < 0 and not in_next_rotation:
+                nav_reason = f"📉 Below purchase price ({nav_pct:.2f}%) - Hold for NAV recovery"
+                holding_nav = {**holding_with_status, 'reason': nav_reason}
+                categorized['hold_for_nav'].append(holding_nav)
         
         return categorized
     
@@ -349,18 +437,19 @@ class RotationEngine:
                     'ex_div_date': target['next_ex_div_date'].strftime('%a %m/%d')
                 })
         
-        # Check for ready-to-sell holdings
-        if categorized['ready_to_sell']:
+        # Check for ready-to-sell holdings (only those at or above purchase price)
+        sellable_holdings = [h for h in categorized['ready_to_sell'] if h['nav_pct'] >= 0]
+        if sellable_holdings:
             alert['has_action'] = True
             if alert['urgency'] == 'info':
                 alert['urgency'] = 'important'
-            sell_msg = f"✅ {len(categorized['ready_to_sell'])} ticker(s) ready to sell"
+            sell_msg = f"✅ {len(sellable_holdings)} ticker(s) ready to sell"
             if alert['message']:
                 alert['message'] += f" | {sell_msg}"
             else:
                 alert['message'] = sell_msg
             
-            for holding in categorized['ready_to_sell']:
+            for holding in sellable_holdings:
                 alert['actions'].append({
                     'type': 'sell',
                     'ticker': holding['ticker'],

@@ -138,6 +138,38 @@ class WeeklyPaySettingsGUI:
                     'last_ex_date': '2025-10-27',
                     'sector': 'Financials',
                     'active': True
+                },
+                'XDTE': {
+                    'name': 'Roundhill S&P 500 0DTE Covered Call ETF',
+                    'ex_dividend_day': 'Thursday',
+                    'pay_day': 'Friday',
+                    'last_ex_date': '2025-11-07',
+                    'sector': 'Broad Market',
+                    'active': True
+                },
+                'MSTY': {
+                    'name': 'YieldMax MSTR Option Income ETF',
+                    'ex_dividend_day': 'Thursday',
+                    'pay_day': 'Friday',
+                    'last_ex_date': '2025-11-07',
+                    'sector': 'Technology/Crypto',
+                    'active': True
+                },
+                'NVDY': {
+                    'name': 'YieldMax NVDA Option Income ETF',
+                    'ex_dividend_day': 'Monday',
+                    'pay_day': 'Tuesday',
+                    'last_ex_date': '2025-11-04',
+                    'sector': 'Technology',
+                    'active': True
+                },
+                'TSLY': {
+                    'name': 'YieldMax TSLA Option Income ETF',
+                    'ex_dividend_day': 'Monday',
+                    'pay_day': 'Tuesday',
+                    'last_ex_date': '2025-11-04',
+                    'sector': 'Technology',
+                    'active': True
                 }
             }
         }
@@ -381,63 +413,153 @@ class WeeklyPaySettingsGUI:
         }
     
     def add_new_ticker(self):
-        """Add a new ticker dialog"""
+        """Add a new ticker dialog with all required fields"""
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("Add New Ticker")
-        dialog.geometry("400x300")
+        dialog.geometry("500x600")
         dialog.transient(self.root)
         dialog.grab_set()
         
+        # Main container
+        container = ctk.CTkScrollableFrame(dialog, fg_color=self.colors['bg'])
+        container.pack(fill='both', expand=True, padx=10, pady=10)
+        
         ctk.CTkLabel(
-            dialog,
+            container,
             text="Add New WeeklyPay Ticker",
-            font=ctk.CTkFont(size=18, weight="bold")
+            font=ctk.CTkFont(size=20, weight="bold")
         ).pack(pady=15)
         
         # Ticker symbol
-        ctk.CTkLabel(dialog, text="Ticker Symbol:").pack(pady=(10, 5))
-        ticker_entry = ctk.CTkEntry(dialog, width=200)
+        ctk.CTkLabel(container, text="Ticker Symbol *", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(10, 5))
+        ticker_entry = ctk.CTkEntry(container, width=300, placeholder_text="e.g., XDTE")
         ticker_entry.pack(pady=5)
         
         # ETF Name
-        ctk.CTkLabel(dialog, text="ETF Name:").pack(pady=(10, 5))
-        name_entry = ctk.CTkEntry(dialog, width=300)
+        ctk.CTkLabel(container, text="ETF Name *", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(10, 5))
+        name_entry = ctk.CTkEntry(container, width=400, placeholder_text="e.g., Roundhill S&P 500 0DTE Covered Call ETF")
         name_entry.pack(pady=5)
+        
+        # Sector
+        ctk.CTkLabel(container, text="Sector *", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(10, 5))
+        sector_entry = ctk.CTkEntry(container, width=300, placeholder_text="e.g., Technology, Energy, Financials")
+        sector_entry.pack(pady=5)
+        sector_entry.insert(0, "Technology")
+        
+        # Ex-Dividend Day
+        ctk.CTkLabel(container, text="Ex-Dividend Day *", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(10, 5))
+        ex_div_day = ctk.CTkOptionMenu(
+            container,
+            values=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            width=200,
+            fg_color=self.colors['entry_bg'],
+            button_color=self.colors['button'],
+            button_hover_color=self.colors['button_hover']
+        )
+        ex_div_day.pack(pady=5)
+        ex_div_day.set('Tuesday')
+        
+        # Pay Day
+        ctk.CTkLabel(container, text="Pay Day *", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(10, 5))
+        pay_day = ctk.CTkOptionMenu(
+            container,
+            values=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            width=200,
+            fg_color=self.colors['entry_bg'],
+            button_color=self.colors['button'],
+            button_hover_color=self.colors['button_hover']
+        )
+        pay_day.pack(pady=5)
+        pay_day.set('Wednesday')
+        
+        # Last Ex-Date
+        ctk.CTkLabel(container, text="Last Ex-Dividend Date *", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(10, 5))
+        ctk.CTkLabel(container, text="Format: YYYY-MM-DD", font=ctk.CTkFont(size=10), text_color='#9ca3af').pack(pady=2)
+        last_date_entry = ctk.CTkEntry(container, width=200, placeholder_text="e.g., 2025-11-10")
+        last_date_entry.pack(pady=5)
+        last_date_entry.insert(0, datetime.now().strftime('%Y-%m-%d'))
+        
+        # Active checkbox
+        active_var = ctk.BooleanVar(value=True)
+        active_check = ctk.CTkCheckBox(
+            container,
+            text="Active (include in dashboard)",
+            variable=active_var,
+            fg_color=self.colors['button'],
+            hover_color=self.colors['button_hover']
+        )
+        active_check.pack(pady=15)
         
         def save_new_ticker():
             ticker = ticker_entry.get().strip().upper()
             name = name_entry.get().strip()
+            sector = sector_entry.get().strip()
+            last_date = last_date_entry.get().strip()
             
+            # Validation
             if not ticker:
                 messagebox.showerror("Error", "Please enter a ticker symbol")
+                return
+            
+            if not name:
+                messagebox.showerror("Error", "Please enter an ETF name")
                 return
             
             if ticker in self.settings['tickers']:
                 messagebox.showerror("Error", f"Ticker {ticker} already exists")
                 return
             
-            # Add with default settings
+            # Validate date format
+            try:
+                datetime.strptime(last_date, '%Y-%m-%d')
+            except ValueError:
+                messagebox.showerror("Error", "Invalid date format. Use YYYY-MM-DD")
+                return
+            
+            # Add new ticker with all fields
             self.settings['tickers'][ticker] = {
-                'name': name or f'{ticker} ETF',
-                'ex_dividend_day': 'Tuesday',
-                'pay_day': 'Wednesday',
-                'last_ex_date': datetime.now().strftime('%Y-%m-%d'),
-                'sector': 'Technology',
-                'active': True
+                'name': name,
+                'sector': sector or 'Technology',
+                'ex_dividend_day': ex_div_day.get(),
+                'pay_day': pay_day.get(),
+                'last_ex_date': last_date,
+                'active': active_var.get()
             }
             
-            # Refresh UI
-            dialog.destroy()
-            self.refresh_ticker_list()
+            # Save immediately
+            if self.save_settings():
+                messagebox.showinfo("Success", f"Ticker {ticker} added successfully!")
+                dialog.destroy()
+                # Refresh the main window to show the new ticker
+                self.refresh_ticker_list()
+            else:
+                messagebox.showerror("Error", "Failed to save ticker")
+        
+        # Button frame
+        button_frame = ctk.CTkFrame(container, fg_color='transparent')
+        button_frame.pack(pady=20)
         
         ctk.CTkButton(
-            dialog,
-            text="Add Ticker",
+            button_frame,
+            text="✅ Add Ticker",
             command=save_new_ticker,
             fg_color=self.colors['success'],
-            height=40,
-            width=150
-        ).pack(pady=20)
+            hover_color='#16a34a',
+            height=45,
+            width=150,
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(side='left', padx=5)
+        
+        ctk.CTkButton(
+            button_frame,
+            text="❌ Cancel",
+            command=dialog.destroy,
+            fg_color=self.colors['error'],
+            hover_color='#dc2626',
+            height=45,
+            width=150,
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(side='left', padx=5)
     
     def delete_ticker(self, ticker, frame):
         """Delete a ticker from settings"""

@@ -20,6 +20,18 @@ import math
 import sys
 import os
 import pytz
+import time
+
+# Import settings manager to load ex-dividend dates from JSON
+from settings_manager import WeeklyPaySettingsManager
+
+# Import streamlit-autorefresh for automatic page updates
+try:
+    from streamlit_autorefresh import st_autorefresh
+    AUTOREFRESH_AVAILABLE = True
+except ImportError:
+    AUTOREFRESH_AVAILABLE = False
+    print("streamlit-autorefresh not available - install with: pip install streamlit-autorefresh")
 
 # Import rotation engine for timing and NAV-based rotation logic
 try:
@@ -53,6 +65,57 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# ===== AUTO-REFRESH FUNCTIONALITY =====
+# Auto-refresh every 60 seconds using streamlit-autorefresh
+if AUTOREFRESH_AVAILABLE:
+    # Initialize session state variables first
+    if 'last_refresh' not in st.session_state:
+        st.session_state.last_refresh = time.time()
+        st.session_state.refresh_count = 0
+        st.session_state.last_count = 0
+    
+    # This will auto-refresh the page every 60000ms (60 seconds)
+    # Returns the number of times refreshed
+    count = st_autorefresh(interval=60000, limit=None, key="datarefresh")
+    
+    # Update timestamp on each refresh
+    st.session_state.last_refresh = time.time()
+    st.session_state.refresh_count = count
+    
+    # Show a toast notification when refresh happens (visual feedback)
+    if count > st.session_state.last_count:
+        st.toast("🔄 Dashboard refreshed!", icon="✅")
+        st.session_state.last_count = count
+    
+    # Show refresh status in sidebar for debugging
+    st.sidebar.info(f"✅ Auto-refresh: ACTIVE\n🔄 Refreshed: {count} times\n⏰ Interval: Every 60s")
+else:
+    # Fallback: manual refresh only
+    if 'last_refresh' not in st.session_state:
+        st.session_state.last_refresh = time.time()
+        st.session_state.refresh_count = 0
+    st.sidebar.warning("⚠️ Auto-refresh: NOT AVAILABLE\nInstall: pip install streamlit-autorefresh")
+
+# Utility function to fetch current prices
+def get_current_prices(tickers):
+    """Fetch current prices for a list of tickers using yfinance"""
+    prices = {}
+    try:
+        import yfinance as yf
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                # Try different price fields
+                current_price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
+                if current_price:
+                    prices[ticker] = current_price
+            except Exception as e:
+                print(f"Error fetching price for {ticker}: {e}")
+    except ImportError:
+        print("yfinance not available for price fetching")
+    return prices
 
 # WeeklyPay Scoring Formula (matches day.py implementation)
 def weeklypay_scoring_formula(weekly_yield, rsi, days_to_earnings):
@@ -223,7 +286,11 @@ def get_real_earnings_calendar():
         'XOMO': 'XOM',    # Energy - Exxon Mobil
         'BRKW': 'BRK.B',  # Financials - Berkshire Hathaway
         'TSLW': 'TSLA',   # Technology - Tesla (high volatility)
-        'QDTE': 'QQQ'     # Weekly payer (Thu ex-div, Fri pay) - Nasdaq 100 (0DTE strategy)
+        'QDTE': 'QQQ',    # Weekly payer (Thu ex-div, Fri pay) - Nasdaq 100 (0DTE strategy)
+        'XDTE': 'SPY',    # Weekly payer (Thu ex-div, Fri pay) - S&P 500 (0DTE strategy)
+        'MSTY': 'MSFT',   # Weekly payer (Thu ex-div, Fri pay) - Microsoft covered call
+        'NVDY': 'NVDA',   # Weekly payer (Mon ex-div, Tue pay) - NVDA daily income
+        'TSLY': 'TSLA'    # Weekly payer (Mon ex-div, Tue pay) - TSLA covered call
     }
     
     current_date = datetime.now()
@@ -320,7 +387,11 @@ def get_real_earnings_calendar():
             'XOMO': 28,  # XOM - typically reports ~4 weeks
             'BRKW': 90,  # BRK.B - annual meeting (not traditional earnings)
             'TSLW': 21,  # TSLA - typically reports ~3 weeks
-            'QDTE': 90   # QQQ - no single earnings, spread across quarter
+            'QDTE': 90,  # QQQ - no single earnings, spread across quarter
+            'XDTE': 90,  # SPY - no single earnings, spread across quarter
+            'MSTY': 35,  # MSFT - same as MSFW
+            'NVDY': 14,  # NVDA - same as NVDW
+            'TSLY': 21   # TSLA - same as TSLW
         }
         days_away = fallback_days.get(etf_ticker, 30)
         earnings_calendar[etf_ticker] = current_date + timedelta(days=days_away)
@@ -373,7 +444,11 @@ def get_fallback_earnings_calendar():
         'XOMO': 7,   # XOM reports ~1 week into earnings season
         'BRKW': 0,   # BRK.B (Berkshire) - no traditional earnings cycle
         'TSLW': 1,   # TSLA tends to report ~1 day later
-        'QDTE': 0    # QQQ (index) - no single earnings date
+        'QDTE': 0,   # QQQ (index) - no single earnings date
+        'XDTE': 0,   # SPY (index) - no single earnings date
+        'MSTY': 0,   # MSFT - same as MSFW
+        'NVDY': 3,   # NVDA - same as NVDW
+        'TSLY': 1    # TSLA - same as TSLW
     }
     
     earnings_calendar = {}
@@ -593,16 +668,29 @@ def format_rotation_week_summary(df):
     
     summary = []
     
-    # Get rotation signals from DataFrame
-    buy_signals = df[df['Rotation_Signal'] == 'BUY'].sort_values('WeeklyPay_Score', ascending=False)
+    # Get next rotation group tickers only (not all BUY signals)
+    if ROTATION_ENGINE_AVAILABLE:
+        try:
+            engine = RotationEngine()
+            next_targets = engine.find_next_rotation_targets()
+            next_group_tickers = [t['ticker'] for t in next_targets]
+            
+            # Filter df to only next rotation group and sort by score
+            buy_signals = df[df['Ticker'].isin(next_group_tickers)].sort_values('WeeklyPay_Score', ascending=False)
+        except:
+            # Fallback to old behavior if rotation engine fails
+            buy_signals = df[df['Rotation_Signal'] == 'BUY'].sort_values('WeeklyPay_Score', ascending=False)
+    else:
+        buy_signals = df[df['Rotation_Signal'] == 'BUY'].sort_values('WeeklyPay_Score', ascending=False)
+    
     sell_signals = df[df['Rotation_Signal'] == 'SELL'].sort_values('WeeklyPay_Score', ascending=True)
     hold_signals = df[df['Rotation_Signal'] == 'HOLD']
     
     summary.append(f"Week of {week_start}-{week_end}")
     summary.append("")
     
-    # Rotation INTO signals (BUY)
-    for _, row in buy_signals.head(3).iterrows():
+    # Rotation INTO signals (BUY) - show all next rotation group tickers
+    for _, row in buy_signals.iterrows():
         ticker = row['Ticker']
         score = row['WeeklyPay_Score']
         yield_pct = row['Weekly_Yield_%']
@@ -717,8 +805,8 @@ def create_tkinter_gui_window():
             color = trophy_colors.get(rank, "#6c757d")
             emoji = trophy_emojis.get(rank, "📊")
             
-            trophy_frame = tk.Frame(parent, bg=color, relief='raised', bd=3, width=200, height=120)
-            trophy_frame.pack(side=tk.LEFT, padx=10, pady=10)
+            trophy_frame = tk.Frame(parent, bg=color, relief='raised', bd=3, width=240, height=120)
+            trophy_frame.pack(side=tk.LEFT, padx=12, pady=10)
             trophy_frame.pack_propagate(False)
             
             # Rank and emoji
@@ -763,11 +851,11 @@ def create_tkinter_gui_window():
             summary = format_rotation_week_summary(df)
             
             # Create rotation bars
-            rotation_title = tk.Label(rotation_container, text="📊 Weekly Rotation Signals", 
+            rotation_title = tk.Label(rotation_container, text="📊 Weekly Rotation Signals (Top 8)", 
                                      font=("Arial", 16, "bold"), bg='#f8f9fa', fg='#2c3e50')
             rotation_title.pack(pady=10)
             
-            for _, row in df.head(6).iterrows():
+            for _, row in df.head(8).iterrows():
                 signal_text = "[BUY FRI]" if row['Friday_Purchase_Flag'] else "[WAIT]"
                 signal_color = get_signal_color(signal_text)
                 score_color = get_score_color(row['WeeklyPay_Score'])
@@ -1011,16 +1099,19 @@ def create_tkinter_gui_window():
                         targets_frame = tk.Frame(alert_frame, bg=bg_color)
                         targets_frame.pack(fill=tk.X, padx=20, pady=10)
                         
+                        # Get the ex-dividend day name for the group
+                        ex_day_name = next_targets[0]['next_ex_div_date'].strftime('%A')
+                        
                         tk.Label(
                             targets_frame,
-                            text="🎯 NEXT ROTATION OPPORTUNITIES (Within 2 Days):",
+                            text=f"🎯 NEXT ROTATION GROUP - {ex_day_name} Ex-Dividend ({len(next_targets)} tickers):",
                             font=("Arial", 11, "bold"),
                             bg=bg_color,
                             fg=fg_color
                         ).pack(anchor='w', pady=5)
                         
-                        for target in next_targets[:5]:
-                            urgency_icon = '⏰ URGENT' if target['is_urgent'] else '📅 Upcoming'
+                        for target in next_targets:
+                            urgency_icon = '⏰ URGENT' if target['is_urgent'] else '📅 Ready'
                             target_text = f"{urgency_icon} | {target['ticker']} - Buy by: {target['deadline_description']} - Ex-Div: {target['next_ex_div_date'].strftime('%a %m/%d')}"
                             
                             tk.Label(
@@ -1046,7 +1137,7 @@ def create_tkinter_gui_window():
             for item in tree.get_children():
                 tree.delete(item)
             
-            for _, row in df.head(10).iterrows():
+            for _, row in df.head(14).iterrows():
                 values = (
                     row['Ticker'],
                     f"{row['WeeklyPay_Score']:.2f}",
@@ -1097,7 +1188,7 @@ def create_tkinter_gui_window():
         # Create main window with vibrant colors
         root = tk.Tk()
         root.title("🚀 WeeklyPay Tactical Rotation Engine - Colorful GUI")
-        root.geometry("1400x900")
+        root.geometry("1600x950")
         root.configure(bg='#f8f9fa')
         
         # Make window visible and bring to front
@@ -2019,11 +2110,8 @@ if __name__ == "__main__":
                               relief='raised', bd=3, cursor='hand2')
         refresh_btn.pack(side=tk.LEFT, padx=5)
         
-        auto_refresh_btn = tk.Button(left_buttons, text="⚡ Auto Refresh", 
-                                   font=("Arial", 12, "bold"),
-                                   bg='#17a2b8', fg='white', padx=20, pady=8,
-                                   relief='raised', bd=3, cursor='hand2')
-        auto_refresh_btn.pack(side=tk.LEFT, padx=5)
+        # Auto-refresh button removed - not supported in standalone function mode
+        # (would need to be implemented as a class-based GUI for proper auto-refresh)
         
         # Right side buttons
         right_buttons = tk.Frame(button_frame, bg='#f8f9fa')
@@ -2113,25 +2201,10 @@ def get_live_ex_dividend_dates():
     current_date = datetime.now()
     ex_dividend_dates = {}
     
-    # Known weekly ETF tickers
-    weekly_etfs = ['NVDW', 'AMDW', 'HOOW', 'MSFW', 'GOOW', 'NFLW', 'XOMO', 'BRKW', 'TSLW', 'QDTE']
-    
-    # CHECK: UPDATED: Accurate ex-dividend dates from user confirmation
-    # Original 6 ETFs: Ex-dividend TUESDAY, Pay WEDNESDAY (weekly pattern)
-    # XOMO & QDTE: Ex-dividend THURSDAY, Pay FRIDAY (weekly pattern)
-    # TSLW & BRKW: Ex-dividend MONDAY, Pay TUESDAY (weekly pattern) - UPDATED 10/30/25
-    last_known_ex_div = {
-        'MSFW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'NVDW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'HOOW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'AMDW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'GOOW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'NFLW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'XOMO': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Energy sector
-        'QDTE': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Weekly Thursday payer
-        'TSLW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule
-        'BRKW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule (Financials)
-    }
+    # Load settings from JSON file - NO HARDCODED DATES
+    settings_mgr = WeeklyPaySettingsManager()
+    last_known_ex_div = settings_mgr.get_last_known_ex_div_dates()
+    weekly_etfs = settings_mgr.get_active_tickers()
     
     for ticker in weekly_etfs:
         try:
@@ -2176,29 +2249,19 @@ def get_live_ex_dividend_dates():
     return ex_dividend_dates
 
 def get_fallback_ex_dividend_dates():
-    """Fallback function when yfinance is not available"""
+    """
+    Fallback function when yfinance is not available
+    Uses settings from weeklypay_settings.json - NO HARDCODED DATES
+    """
     from datetime import datetime, timedelta
     current_date = datetime.now()
     
-    # SUCCESS UPDATED: Accurate last ex-dividend dates from user confirmation  
-    # Original 6 ETFs: Ex-dividend TUESDAY, Pay WEDNESDAY (weekly pattern)
-    # XOMO & QDTE: Ex-dividend THURSDAY, Pay FRIDAY (weekly pattern)
-    # TSLW & BRKW: Ex-dividend MONDAY, Pay TUESDAY (weekly pattern) - UPDATED 10/30/25
-    last_known_ex_div = {
-        'MSFW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'NVDW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'HOOW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'AMDW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'GOOW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'NFLW': datetime(2025, 10, 7),  # Tuesday 10/7 (pays Wednesday)
-        'XOMO': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Energy sector
-        'QDTE': datetime(2025, 10, 3),  # Thursday 10/3 (pays Friday) - Weekly Thursday payer
-        'TSLW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule
-        'BRKW': datetime(2025, 10, 27), # Monday 10/27 (pays Tuesday) - CORRECTED: Mon/Tue schedule (Financials)
-    }
+    # Load settings from JSON file
+    settings_mgr = WeeklyPaySettingsManager()
+    last_known_ex_div = settings_mgr.get_last_known_ex_div_dates()
+    weekly_etfs = settings_mgr.get_active_tickers()
     
     ex_dividend_dates = {}
-    weekly_etfs = ['NVDW', 'AMDW', 'HOOW', 'MSFW', 'GOOW', 'NFLW', 'XOMO', 'BRKW', 'TSLW', 'QDTE']
     
     for ticker in weekly_etfs:
         if ticker in last_known_ex_div:
@@ -2213,50 +2276,40 @@ def get_fallback_ex_dividend_dates():
             next_ex_div = last_ex_div + timedelta(days=(weeks_passed + 1) * 7)
             ex_dividend_dates[ticker] = next_ex_div
         else:
-            # Estimate based on weekly pattern
-            # Tuesday for most ETFs (weekday 1)
-            # Thursday for XOMO, QDTE (weekday 3)
-            # Monday for TSLW, BRKW (weekday 0)
-            if ticker in ['TSLW', 'BRKW']:
-                # Calculate days until next Monday
+            # Estimate based on weekly pattern from settings - NO HARDCODED TICKERS
+            ticker_info = settings_mgr.get_ticker_info(ticker)
+            if ticker_info and 'ex_dividend_day' in ticker_info:
+                target_weekday = settings_mgr.get_day_number(ticker_info['ex_dividend_day'])
+                # Calculate days until next occurrence of that weekday
+                days_until_target = (target_weekday - current_date.weekday()) % 7
+                if days_until_target == 0:
+                    days_until_target = 7
+                ex_dividend_dates[ticker] = current_date + timedelta(days=days_until_target)
+            else:
+                # Default to Monday if no settings found
                 days_until_monday = (0 - current_date.weekday()) % 7
                 if days_until_monday == 0:
                     days_until_monday = 7
                 ex_dividend_dates[ticker] = current_date + timedelta(days=days_until_monday)
-            elif ticker in ['XOMO', 'QDTE']:
-                # Calculate days until next Thursday
-                days_until_thursday = (3 - current_date.weekday()) % 7
-                if days_until_thursday == 0:
-                    days_until_thursday = 7
-                ex_dividend_dates[ticker] = current_date + timedelta(days=days_until_thursday)
-            else:
-                # Calculate days until next Tuesday
-                days_until_tuesday = (1 - current_date.weekday()) % 7
-                if days_until_tuesday == 0:
-                    days_until_tuesday = 7
-                ex_dividend_dates[ticker] = current_date + timedelta(days=days_until_tuesday)
     
     return ex_dividend_dates
 
 # Generate realistic ETF data with caching to prevent infinite reloads
 @st.cache_data(ttl=3600)  # Cache for 1 hour to prevent infinite reloads
 def generate_etf_data():
-    """Generate realistic WeeklyPay ETF rotation data using Aristo's identified weekly dividend ETFs"""
-    # These are the actual weekly dividend ETFs identified by Aristo in the WeeklyPay plan
-    etfs = [
-        # Weekly Dividend ETFs - GraniteShares 1x Long Daily ETFs
-        ('NVDW', 'GraniteShares 1x Long NVDA Daily ETF', 'Technology', 1.15),
-        ('AMDW', 'GraniteShares 1x Long AMD Daily ETF', 'Technology', 0.95),
-        ('HOOW', 'Roundhill HOOD WeeklyPay ETF', 'Technology', 0.75),
-        ('MSFW', 'GraniteShares 1x Long MSFT Daily ETF', 'Technology', 0.85),
-        ('GOOW', 'GraniteShares 1x Long GOOGL Daily ETF', 'Technology', 0.65),
-        ('NFLW', 'GraniteShares 1x Long NFLX Daily ETF', 'Communication', 0.55),
-        # NEW: Diversification tickers
-        ('XOMO', 'GraniteShares 1x Long XOM Daily ETF', 'Energy', 1.05),
-        ('BRKW', 'Yieldmax BRK.B Option Income Strategy ETF', 'Financials', 0.85),
-        ('TSLW', 'GraniteShares 1x Long TSLA Daily ETF', 'Technology', 1.20),
-        ('QDTE', 'Roundhill QQQ 0DTE Covered Call ETF', 'Technology', 1.10)
-    ]
+    """Generate realistic WeeklyPay ETF rotation data using tickers from settings file"""
+    # Load tickers from settings file (includes all active tickers)
+    settings_manager = WeeklyPaySettingsManager()
+    all_tickers_info = settings_manager.get_all_tickers_info()
+    
+    # Build etfs list from settings
+    etfs = []
+    for ticker, info in all_tickers_info.items():
+        name = info.get('name', ticker)
+        sector = info.get('sector', 'Technology')
+        # Estimate base yield if not in settings (for display purposes)
+        base_yield = 1.0  # Default 1% weekly
+        etfs.append((ticker, name, sector, base_yield))
     
     # Enhanced ex-dividend and earnings data for WeeklyPay tactical timing
     current_date = datetime.now()
@@ -2581,6 +2634,10 @@ def get_current_holdings_for_rotation():
             elif row['Action'] == 'SELL':
                 position_summary[ticker]['shares'] -= row['Quantity']
         
+        # Get current prices for all tickers with positions
+        tickers_with_positions = [t for t, d in position_summary.items() if d['shares'] > 0]
+        current_prices = get_current_prices(tickers_with_positions)
+        
         # Convert to holdings format for rotation engine
         eastern = pytz.timezone('America/New_York')
         
@@ -2593,11 +2650,14 @@ def get_current_holdings_for_rotation():
                 if most_recent_purchase.tzinfo is None:
                     most_recent_purchase = eastern.localize(most_recent_purchase)
                 
+                # Get current price from live data, fallback to purchase price * 1.01 if unavailable
+                current_price = current_prices.get(ticker, avg_purchase_price * 1.01)
+                
                 holdings.append({
                     'ticker': ticker,
                     'purchase_date': most_recent_purchase,
                     'purchase_price': avg_purchase_price,
-                    'current_price': avg_purchase_price * 1.01,  # Placeholder - will be updated with live data
+                    'current_price': current_price,
                     'shares': data['shares']
                 })
                 
@@ -2606,7 +2666,7 @@ def get_current_holdings_for_rotation():
     
     return holdings
 
-def display_rotation_alert(holdings):
+def display_rotation_alert(holdings, df=None):
     """Display rotation engine alert panel with buy/sell recommendations"""
     if not ROTATION_ENGINE_AVAILABLE:
         st.warning("⚠️ Rotation engine not available. Install rotation_engine.py for timing alerts.")
@@ -2694,18 +2754,34 @@ def display_rotation_alert(holdings):
         
         # Display next rotation opportunities
         if next_targets:
-            st.markdown("### 🎯 Next Rotation Opportunities (Within 2 Days)")
+            # Get the ex-dividend day name for the group
+            ex_day_name = next_targets[0]['next_ex_div_date'].strftime('%A')
             
+            st.markdown(f"### 🎯 Next Rotation Group - {ex_day_name} Ex-Dividend ({len(next_targets)} tickers)")
+            st.info(f"💡 **Purchase deadline:** Must buy by {next_targets[0]['buy_deadline'].strftime('%A, %B %d at %I:%M %p ET')} (day before ex-dividend date)")
+            
+            # Build dataframe with ticker info
             target_df = pd.DataFrame([
                 {
                     'Ticker': t['ticker'],
-                    'Name': t['name'],
+                    'Name': t['name'][:35] + '...' if len(t['name']) > 35 else t['name'],
                     'Ex-Dividend': t['next_ex_div_date'].strftime('%a %m/%d'),
                     'Buy Deadline': t['deadline_description'],
-                    'Urgency': '⏰ URGENT' if t['is_urgent'] else '📅 Upcoming'
+                    'Status': '⏰ URGENT' if t['is_urgent'] else '📅 Ready'
                 }
-                for t in next_targets[:5]  # Show top 5
+                for t in next_targets  # Show all in the group
             ])
+            
+            # Add scores from main scoring dataframe if available
+            if df is not None:
+                # Create score lookup dict from main df
+                score_lookup = dict(zip(df['Ticker'], df['WeeklyPay_Score']))
+                target_df['Score'] = target_df['Ticker'].map(score_lookup)
+                # Sort by score (highest first), fallback to ticker name
+                target_df = target_df.sort_values('Score', ascending=False, na_position='last')
+            else:
+                # Fallback: sort alphabetically
+                target_df = target_df.sort_values('Ticker')
             
             st.dataframe(target_df, use_container_width=True, hide_index=True)
         
@@ -2747,12 +2823,53 @@ def display_exit_window_monitor(current_prices):
             bg_color = '#95a5a6'  # Gray - monitor only
             border_color = '#7f8c8d'
         
-        # Display exit window panel
+        # Get last update time and refresh count
+        eastern = pytz.timezone('US/Eastern')
+        last_update = datetime.fromtimestamp(st.session_state.last_refresh, tz=eastern)
+        refresh_count = st.session_state.get('refresh_count', 0)
+        
+        # Build ticker-specific status lines
+        ticker_lines = []
+        for exit_window in exit_windows:
+            ticker = exit_window['ticker']
+            quality = exit_window['quality']
+            nav_pct = exit_window['nav_change_pct']
+            
+            # Determine icon and message based on quality
+            if quality == 'IDEAL':
+                icon = '🟢'
+                status = f"IDEAL PROFIT ({nav_pct:+.2f}%) - SELL NOW"
+            elif quality == 'GOOD':
+                icon = '🟢'
+                status = f"GOOD PROFIT ({nav_pct:+.2f}%) - SELL RECOMMENDED"
+            elif quality == 'ACCEPTABLE':
+                icon = '🟡'
+                status = f"ACCEPTABLE ({nav_pct:+.2f}%) - POTENTIAL SELL"
+            elif quality == 'BREAKEVEN':
+                icon = '⚪'
+                status = f"AT BREAKEVEN ({nav_pct:+.2f}%) - HOLD OR EXIT"
+            else:  # LOSS
+                icon = '🔴'
+                status = f"UNDERWATER ({nav_pct:+.2f}%) - HOLD FOR RECOVERY"
+            
+            ticker_lines.append(f"<p style='margin: 5px 0; color: white; font-size: 16px;'>{icon} <strong>{ticker}</strong>: {status}</p>")
+        
+        ticker_status_html = '\n'.join(ticker_lines)
+        
+        # Display exit window panel with last update time and refresh info
         st.markdown(f"""
         <div style='background-color: {bg_color}; padding: 20px; border-radius: 10px; border: 3px solid {border_color}; margin-bottom: 20px;'>
-            <h2 style='margin-top: 0; color: white;'>🎯 Exit Window Monitor</h2>
-            <p style='font-size: 18px; margin: 10px 0; color: white;'><strong>{alert['message']}</strong></p>
-            <p style='font-size: 14px; margin: 5px 0; color: white;'>
+            <div style='display: flex; justify-content: space-between; align-items: center;'>
+                <h2 style='margin: 0; color: white;'>🎯 Exit Window Monitor</h2>
+                <div style='text-align: right;'>
+                    <p style='margin: 0; color: white; font-size: 16px; font-weight: bold;'>⏰ Last Updated: {last_update.strftime('%I:%M:%S %p ET')}</p>
+                    <p style='margin: 5px 0 0 0; color: white; font-size: 16px; font-weight: bold;'>🔄 Auto-refresh: Every 60s (Refreshed {refresh_count}x)</p>
+                </div>
+            </div>
+            <div style='margin-top: 15px;'>
+                {ticker_status_html}
+            </div>
+            <p style='font-size: 14px; margin: 15px 0 5px 0; color: white; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 10px;'>
                 ✅ Ideal: {alert['ideal_count']} | 🟢 Good: {alert['good_count']} | 
                 🟡 Acceptable: {alert['acceptable_count']} | 🔴 Loss: {alert['loss_count']}
             </p>
@@ -2849,12 +2966,39 @@ def display_exit_window_monitor(current_prices):
 st.markdown('<h1 class="main-header">WeeklyPay Tactical Rotation Engine</h1>', unsafe_allow_html=True)
 st.markdown('<h3 style="text-align: center; color: #7f8c8d; margin-top: -10px;">Weekly Dividend ETFs | Real-time Rotation Signals</h3>', unsafe_allow_html=True)
 
+# Add refresh button and mode selector
+col1, col2, col3 = st.columns([1, 1, 1])
+with col1:
+    rotation_mode = st.toggle("🔄 **ROTATION MODE** (3+3 Strategy)", value=False, help="Enable 3 Tuesday + 3 Thursday rotation strategy with NAV optimization")
+with col2:
+    if st.button("🔄 Refresh Data (Clear Cache)", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+with col3:
+    if rotation_mode:
+        st.metric("Active Mode", "ROTATION 3+3")
+    else:
+        st.metric("Active Mode", "FULL PORTFOLIO")
+
+# Formula display
+st.markdown("""
+<div class="formula-box">
+    <h3>WeeklyPay Scoring Formula</h3>
+    <p><strong>Score = (Yield Score * 0.5) + (Momentum Score * 0.3) + (Earnings Score * 0.2)</strong></p>
+    <p>TARGET <em>Tactical ETF rotation based on mathematical precision</em></p>
+</div>
+""", unsafe_allow_html=True)
+
+# Generate data
+df = generate_etf_data()
+df_sorted = df.sort_values('WeeklyPay_Score', ascending=False).reset_index(drop=True)
+
 # ============================================================================
 # ROTATION ENGINE ALERT PANEL - Shows urgent buy/sell opportunities
 # ============================================================================
 if ROTATION_ENGINE_AVAILABLE:
     holdings = get_current_holdings_for_rotation()
-    display_rotation_alert(holdings)
+    display_rotation_alert(holdings, df)
     st.markdown("---")
 
 # ============================================================================
@@ -2887,33 +3031,6 @@ if EXIT_MONITOR_AVAILABLE:
     except Exception as e:
         pass  # Silently skip if error
 
-# Add refresh button and mode selector
-col1, col2, col3 = st.columns([1, 1, 1])
-with col1:
-    rotation_mode = st.toggle("🔄 **ROTATION MODE** (3+3 Strategy)", value=False, help="Enable 3 Tuesday + 3 Thursday rotation strategy with NAV optimization")
-with col2:
-    if st.button("🔄 Refresh Data (Clear Cache)", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-with col3:
-    if rotation_mode:
-        st.metric("Active Mode", "ROTATION 3+3")
-    else:
-        st.metric("Active Mode", "FULL PORTFOLIO")
-
-# Formula display
-st.markdown("""
-<div class="formula-box">
-    <h3>WeeklyPay Scoring Formula</h3>
-    <p><strong>Score = (Yield Score * 0.5) + (Momentum Score * 0.3) + (Earnings Score * 0.2)</strong></p>
-    <p>TARGET <em>Tactical ETF rotation based on mathematical precision</em></p>
-</div>
-""", unsafe_allow_html=True)
-
-# Generate data
-df = generate_etf_data()
-df_sorted = df.sort_values('WeeklyPay_Score', ascending=False).reset_index(drop=True)
-
 # ============================================================================
 # ROTATION MODE - 3+3 NAV-OPTIMIZED DIVIDEND CAPTURE STRATEGY
 # ============================================================================
@@ -2933,8 +3050,8 @@ if rotation_mode:
     """, unsafe_allow_html=True)
     
     # Separate Tuesday and Thursday tickers
-    tuesday_tickers = df[df['Ticker'].isin(['NVDW', 'AMDW', 'HOOW', 'MSFW', 'GOOW', 'NFLW'])].copy()
-    thursday_tickers = df[df['Ticker'].isin(['XOMO', 'JPOW', 'TSLW', 'QDTE'])].copy()
+    tuesday_tickers = df[df['Ticker'].isin(['NVDW', 'AMDW', 'HOOW', 'MSFW', 'GOOW', 'NFLW', 'NVDY'])].copy()
+    thursday_tickers = df[df['Ticker'].isin(['XOMO', 'JPOW', 'TSLW', 'QDTE', 'XDTE', 'MSTY'])].copy()
     
     # Sort by NAV recovery potential (score - NAV erosion)
     tuesday_tickers['NAV_Adjusted_Score'] = tuesday_tickers['WeeklyPay_Score'] - (tuesday_tickers['Weekly_Yield_%'] * 0.7)  # Assume 70% NAV recovery
@@ -3402,58 +3519,83 @@ with col3:
 
 st.markdown("---")  # Separator
 
-# Top 3 medals section
-st.markdown("## TROPHY - Top 3 WeeklyPay Rankings")
+# Top 3 medals section - Filter to next rotation group only
+st.markdown("## TROPHY - Top 3 WeeklyPay Rankings (Next Rotation Group)")
+
+# Get next rotation group and filter dataframe
+if ROTATION_ENGINE_AVAILABLE:
+    try:
+        engine = RotationEngine()
+        next_targets = engine.find_next_rotation_targets()
+        next_group_tickers = [t['ticker'] for t in next_targets]
+        ex_day_name = next_targets[0]['next_ex_div_date'].strftime('%A') if next_targets else "Next"
+        
+        # Filter and sort by score
+        df_next_group = df[df['Ticker'].isin(next_group_tickers)].sort_values('WeeklyPay_Score', ascending=False).reset_index(drop=True)
+    except:
+        df_next_group = df_sorted
+        ex_day_name = "All"
+else:
+    df_next_group = df_sorted
+    ex_day_name = "All"
+
+st.markdown(f"<h4 style='text-align: center; color: #7f8c8d;'>{ex_day_name} Ex-Dividend Group</h4>", unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 
-with col1:
-    top1 = df_sorted.iloc[0]
-    eligibility_flag = "SUCCESS" if top1['Payout_Eligible'] else "ERROR"
-    st.markdown(f"""
-    <div class="score-metric medal-gold">
-        <h3>TROPHY GOLD</h3>
-        <h2>{top1['Ticker']} {eligibility_flag}</h2>
-        <p>{top1['Name'][:30]}...</p>
-        <h3>Score: {top1['WeeklyPay_Score']}</h3>
-        <p>Yield: {top1['Weekly_Yield_%']:.2f}% | RSI: {top1['RSI']}</p>
-        <p><strong>CALENDAR Ex-Div: {top1['Ex_Dividend_Date']}</strong></p>
-        <p>CLOCK {top1['Days_to_Ex_Div']} days to dividend</p>
-        <p>CHART {top1['Days_to_Earnings']} days to earnings</p>
-    </div>
-    """, unsafe_allow_html=True)
+if len(df_next_group) >= 1:
+    with col1:
+        top1 = df_next_group.iloc[0]
+        # For next rotation group, they're always eligible (deadline hasn't passed yet)
+        eligibility_flag = "SUCCESS"
+        st.markdown(f"""
+        <div class="score-metric medal-gold">
+            <h3>TROPHY GOLD</h3>
+            <h2>{top1['Ticker']} {eligibility_flag}</h2>
+            <p>{top1['Name'][:30]}...</p>
+            <h3>Score: {top1['WeeklyPay_Score']}</h3>
+            <p>Yield: {top1['Weekly_Yield_%']:.2f}% | RSI: {top1['RSI']}</p>
+            <p><strong>CALENDAR Ex-Div: {top1['Ex_Dividend_Date']}</strong></p>
+            <p>CLOCK {top1['Days_to_Ex_Div']} days to dividend</p>
+            <p>CHART {top1['Days_to_Earnings']} days to earnings</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-with col2:
-    top2 = df_sorted.iloc[1]
-    eligibility_flag = "SUCCESS" if top2['Payout_Eligible'] else "ERROR"
-    st.markdown(f"""
-    <div class="score-metric medal-silver">
-        <h3>TROPHY SILVER</h3>
-        <h2>{top2['Ticker']} {eligibility_flag}</h2>
-        <p>{top2['Name'][:30]}...</p>
-        <h3>Score: {top2['WeeklyPay_Score']}</h3>
-        <p>Yield: {top2['Weekly_Yield_%']:.2f}% | RSI: {top2['RSI']}</p>
-        <p><strong>CALENDAR Ex-Div: {top2['Ex_Dividend_Date']}</strong></p>
-        <p>CLOCK {top2['Days_to_Ex_Div']} days to dividend</p>
-        <p>CHART {top2['Days_to_Earnings']} days to earnings</p>
-    </div>
-    """, unsafe_allow_html=True)
+if len(df_next_group) >= 2:
+    with col2:
+        top2 = df_next_group.iloc[1]
+        # For next rotation group, they're always eligible (deadline hasn't passed yet)
+        eligibility_flag = "SUCCESS"
+        st.markdown(f"""
+        <div class="score-metric medal-silver">
+            <h3>TROPHY SILVER</h3>
+            <h2>{top2['Ticker']} {eligibility_flag}</h2>
+            <p>{top2['Name'][:30]}...</p>
+            <h3>Score: {top2['WeeklyPay_Score']}</h3>
+            <p>Yield: {top2['Weekly_Yield_%']:.2f}% | RSI: {top2['RSI']}</p>
+            <p><strong>CALENDAR Ex-Div: {top2['Ex_Dividend_Date']}</strong></p>
+            <p>CLOCK {top2['Days_to_Ex_Div']} days to dividend</p>
+            <p>CHART {top2['Days_to_Earnings']} days to earnings</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-with col3:
-    top3 = df_sorted.iloc[2]
-    eligibility_flag = "SUCCESS" if top3['Payout_Eligible'] else "ERROR"
-    st.markdown(f"""
-    <div class="score-metric medal-bronze">
-        <h3>TROPHY BRONZE</h3>
-        <h2>{top3['Ticker']} {eligibility_flag}</h2>
-        <p>{top3['Name'][:30]}...</p>
-        <h3>Score: {top3['WeeklyPay_Score']}</h3>
-        <p>Yield: {top3['Weekly_Yield_%']:.2f}% | RSI: {top3['RSI']}</p>
-        <p><strong>CALENDAR Ex-Div: {top3['Ex_Dividend_Date']}</strong></p>
-        <p>CLOCK {top3['Days_to_Ex_Div']} days to dividend</p>
-        <p>CHART {top3['Days_to_Earnings']} days to earnings</p>
-    </div>
-    """, unsafe_allow_html=True)
+if len(df_next_group) >= 3:
+    with col3:
+        top3 = df_next_group.iloc[2]
+        # For next rotation group, they're always eligible (deadline hasn't passed yet)
+        eligibility_flag = "SUCCESS"
+        st.markdown(f"""
+        <div class="score-metric medal-bronze">
+            <h3>TROPHY BRONZE</h3>
+            <h2>{top3['Ticker']} {eligibility_flag}</h2>
+            <p>{top3['Name'][:30]}...</p>
+            <h3>Score: {top3['WeeklyPay_Score']}</h3>
+            <p>Yield: {top3['Weekly_Yield_%']:.2f}% | RSI: {top3['RSI']}</p>
+            <p><strong>CALENDAR Ex-Div: {top3['Ex_Dividend_Date']}</strong></p>
+            <p>CLOCK {top3['Days_to_Ex_Div']} days to earnings</p>
+            <p>CHART {top3['Days_to_Earnings']} days to earnings</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Key metrics
 st.markdown("## CHART Key Performance Metrics")
@@ -3488,28 +3630,35 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Immediate action items
-eligible_etfs = df_sorted[df_sorted['Payout_Eligible'] == True]
-urgent_div = df_sorted[df_sorted['Days_to_Ex_Div'] <= 2]
-urgent_earnings = df_sorted[df_sorted['Days_to_Earnings'] <= 7]
+# Immediate action items - Filter to next rotation group only
+if ROTATION_ENGINE_AVAILABLE and 'df_next_group' in locals():
+    # Use next rotation group from Trophy section
+    eligible_etfs = df_next_group[df_next_group['Payout_Eligible'] == True]
+    urgent_div = df_next_group[df_next_group['Days_to_Ex_Div'] <= 2]
+    urgent_earnings = df_next_group[df_next_group['Days_to_Earnings'] <= 7]
+else:
+    # Fallback to old behavior
+    eligible_etfs = df_sorted[df_sorted['Payout_Eligible'] == True]
+    urgent_div = df_sorted[df_sorted['Days_to_Ex_Div'] <= 2]
+    urgent_earnings = df_sorted[df_sorted['Days_to_Earnings'] <= 7]
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown("### GREEN - Payout Eligible")
-    if not eligible_etfs.empty:
-        for _, etf in eligible_etfs.head(3).iterrows():
-            st.markdown(f"**{etf['Ticker']}**: {etf['Days_to_Ex_Div']} days left")
+    st.markdown("### GREEN - Next Rotation Group")
+    if not df_next_group.empty:
+        for _, etf in df_next_group.iterrows():
+            st.markdown(f"**{etf['Ticker']}**: Score {etf['WeeklyPay_Score']:.2f} | {etf['Days_to_Ex_Div']} days to ex-div")
     else:
-        st.markdown("WARNING - No ETFs eligible for next payout")
+        st.markdown("INFO - No rotation group available")
 
 with col2:
-    st.markdown("### RED - Urgent Dividends")
+    st.markdown("### RED - Urgent Action Needed")
     if not urgent_div.empty:
         for _, etf in urgent_div.iterrows():
-            st.markdown(f"**{etf['Ticker']}**: Ex-div in {etf['Days_to_Ex_Div']} days!")
+            st.markdown(f"**{etf['Ticker']}**: ⏰ URGENT - Ex-div in {etf['Days_to_Ex_Div']} day(s)!")
     else:
-        st.markdown("CHECK - No urgent dividend dates")
+        st.markdown("CHECK - No urgent deadlines in next group")
 
 with col3:
     st.markdown("### CHART - Near Earnings")
@@ -3527,9 +3676,55 @@ display_df = df_sorted.copy()
 display_df['Weekly_Yield_%'] = display_df['Weekly_Yield_%'].round(2)
 display_df['WeeklyPay_Score'] = display_df['WeeklyPay_Score'].round(2)
 
-# Add payout eligibility symbols and Friday purchase flags
-display_df['Payout_Status'] = display_df['Payout_Eligible'].apply(lambda x: "CHECK - Eligible" if x else "X - Too Late")
-display_df['Friday_Buy_Signal'] = display_df['Friday_Purchase_Flag'].apply(lambda x: "GREEN - BUY FRIDAY" if x else "CIRCLE - Wait")
+# Get next rotation group tickers for better status display
+next_group_ticker_list = []
+if ROTATION_ENGINE_AVAILABLE:
+    try:
+        engine = RotationEngine()
+        next_targets = engine.find_next_rotation_targets()
+        next_group_ticker_list = [t['ticker'] for t in next_targets]
+    except:
+        pass
+
+# Add payout eligibility with next rotation group awareness
+def format_payout_status(row):
+    if row['Ticker'] in next_group_ticker_list:
+        return "🎯 NEXT ROTATION - Ready"
+    elif row['Payout_Eligible']:
+        return "✓ Eligible"
+    else:
+        return "✗ Passed"
+
+display_df['Payout_Status'] = display_df.apply(format_payout_status, axis=1)
+
+# Add purchase timing signal (dynamic based on ex-dividend day)
+def format_purchase_signal(row):
+    ex_date = pd.to_datetime(row['Ex_Dividend_Date'])
+    ex_day_name = ex_date.strftime('%A')  # Monday, Tuesday, etc.
+    
+    # Determine buy day (day before ex-dividend)
+    buy_day_map = {
+        'Monday': 'Friday',
+        'Tuesday': 'Monday', 
+        'Wednesday': 'Tuesday',
+        'Thursday': 'Wednesday',
+        'Friday': 'Thursday'
+    }
+    buy_day = buy_day_map.get(ex_day_name, 'Day Before')
+    
+    # Check if ticker is in next rotation and deadline is approaching
+    if row['Ticker'] in next_group_ticker_list:
+        days_left = row['Days_to_Ex_Div'] - 1  # Days until buy deadline
+        if days_left <= 1:
+            return f"🟢 BUY {buy_day.upper()} (URGENT)"
+        else:
+            return f"📅 Buy by {buy_day}"
+    elif row['Friday_Purchase_Flag']:
+        return f"🟢 BUY {buy_day.upper()}"
+    else:
+        return "⏸️ Not Current"
+
+display_df['Purchase_Timing'] = display_df.apply(format_purchase_signal, axis=1)
 
 # Add rotation signals and NAV alerts
 display_df['Rotation_Action'] = display_df['Rotation_Signal'].apply(
@@ -3539,13 +3734,13 @@ display_df['NAV_Alert'] = display_df['NAV_Erosion_Alert'].apply(lambda x: "STOP 
 
 # Reorder columns for better display
 display_cols = ['Ticker', 'WeeklyPay_Score', 'Rotation_Action', 'Weekly_Yield_%', 'RSI', 
-               'Ex_Dividend_Date', 'Days_to_Ex_Div', 'Payout_Status', 'Friday_Buy_Signal',
+               'Ex_Dividend_Date', 'Days_to_Ex_Div', 'Payout_Status', 'Purchase_Timing',
                'Earnings_Date', 'Days_to_Earnings', 'NAV_Alert', 'Sector']
 display_df = display_df[display_cols]
 
 # Rename columns for clarity
 display_df.columns = ['Ticker', 'Score', 'Rotation Signal', 'Yield %', 'RSI', 
-                     'Ex-Div Date', 'Days to Div', 'Payout Status', 'Friday Signal',
+                     'Ex-Div Date', 'Days to Div', 'Rotation Status', 'Purchase Timing',
                      'Earnings Date', 'Days to Earnings', 'NAV Status', 'Sector']
 
 # Color code the top 3
@@ -3722,26 +3917,56 @@ def calculate_trade_performance(trades_df):
     if trades_df.empty:
         return 0.0, 0.0, 0.0, 0.0, 0, 0
     
-    total_invested = trades_df[trades_df['Action'] == 'BUY']['Total'].sum()
-    total_sold = trades_df[trades_df['Action'] == 'SELL']['Total'].sum()
+    # Calculate per-ticker positions and performance
+    total_current_investment = 0.0
+    realized_capital_gains = 0.0
     total_dividends = trades_df[trades_df['Action'] == 'DIVIDEND']['Total'].sum()
     trade_count = len(trades_df)
+    active_positions = 0
     
-    # Calculate realized capital gains (only from actual sales)
-    # For unsold positions, we can't calculate unrealized gains without live market data
-    net_capital_gains = total_sold - total_invested if total_sold > 0 else 0
+    for ticker in trades_df['Ticker'].unique():
+        ticker_trades = trades_df[trades_df['Ticker'] == ticker].sort_values('Date')
+        
+        shares_bought = ticker_trades[ticker_trades['Action'] == 'BUY']['Quantity'].sum()
+        shares_sold = ticker_trades[ticker_trades['Action'] == 'SELL']['Quantity'].sum()
+        current_shares = shares_bought - shares_sold
+        
+        if current_shares > 0:
+            # Active position - calculate current investment (cost basis of open shares)
+            total_cost = ticker_trades[ticker_trades['Action'] == 'BUY']['Total'].sum()
+            total_sold_proceeds = ticker_trades[ticker_trades['Action'] == 'SELL']['Total'].sum()
+            net_investment = total_cost - total_sold_proceeds
+            total_current_investment += net_investment
+            active_positions += 1
+        
+        # Calculate realized capital gains from CLOSED positions only
+        if shares_sold > 0:
+            # Calculate cost basis of shares sold (FIFO method)
+            buys = ticker_trades[ticker_trades['Action'] == 'BUY'][['Quantity', 'Price']].values
+            sells = ticker_trades[ticker_trades['Action'] == 'SELL'][['Quantity', 'Price']].values
+            
+            sold_cost_basis = 0.0
+            sold_proceeds = 0.0
+            remaining_to_match = shares_sold
+            
+            for buy_qty, buy_price in buys:
+                if remaining_to_match <= 0:
+                    break
+                shares_to_use = min(buy_qty, remaining_to_match)
+                sold_cost_basis += shares_to_use * buy_price
+                remaining_to_match -= shares_to_use
+            
+            for sell_qty, sell_price in sells:
+                sold_proceeds += sell_qty * sell_price
+            
+            # Realized gain = sell proceeds - cost basis of what was sold
+            ticker_realized_gain = sold_proceeds - sold_cost_basis
+            realized_capital_gains += ticker_realized_gain
     
-    # Total return = realized capital gains + dividends
-    # Note: This does NOT include unrealized gains on open positions
-    total_return = net_capital_gains + total_dividends
+    # Total return = realized capital gains + dividends (excludes unrealized gains)
+    total_return = realized_capital_gains + total_dividends
     
-    # Calculate active positions
-    position_summary = trades_df.groupby('Ticker').apply(
-        lambda x: (x[x['Action'] == 'BUY']['Quantity'].sum() - x[x['Action'] == 'SELL']['Quantity'].sum())
-    )
-    active_positions = (position_summary > 0).sum()
-    
-    return total_invested, total_dividends, total_return, net_capital_gains, active_positions, trade_count
+    return total_current_investment, total_dividends, total_return, realized_capital_gains, active_positions, trade_count
 
 # Load existing trades
 trades_df = load_trade_data()
@@ -3752,6 +3977,23 @@ col1, col2 = st.columns([3, 1])
 with col1:
     st.markdown("### 📝 Log New Trade")
     
+    # Investment amount setting with currency format
+    st.session_state.setdefault('investment_per_ticker', 4000.00)
+    # Ensure value is float type
+    current_value = float(st.session_state.investment_per_ticker)
+    investment_amount = st.number_input("💰 Target Investment per Ticker ($)", 
+                                        min_value=100.00, max_value=50000.00, 
+                                        value=current_value, 
+                                        step=100.00,
+                                        format="%.2f",
+                                        help="Used by Quick Fill to calculate quantity")
+    st.session_state.investment_per_ticker = investment_amount
+    
+    # Initialize Quick Fill values in session state (ensure correct types)
+    st.session_state.setdefault('qf_ticker', '')
+    st.session_state.setdefault('qf_quantity', 100)  # int
+    st.session_state.setdefault('qf_price', 50.00)   # float
+    
     # Create input form
     trade_form = st.form("trade_entry", clear_on_submit=True)
     
@@ -3759,18 +4001,29 @@ with col1:
         form_col1, form_col2, form_col3 = st.columns(3)
         
         with form_col1:
-            # Get ticker list for dropdown
-            ticker_list = [''] + sorted(df_sorted['Ticker'].tolist())
-            selected_ticker = st.selectbox("Ticker", ticker_list, key="trade_ticker")
+            # Sort ticker list: Next rotation group first (by score), then rest
+            if ROTATION_ENGINE_AVAILABLE and 'df_next_group' in locals() and not df_next_group.empty:
+                next_group_tickers = df_next_group['Ticker'].tolist()
+                other_tickers = [t for t in df_sorted['Ticker'].tolist() if t not in next_group_tickers]
+                ticker_list = [''] + next_group_tickers + other_tickers
+            else:
+                ticker_list = [''] + df_sorted['Ticker'].tolist()
+            
+            # Use Quick Fill values if available
+            default_ticker_index = 0
+            if st.session_state.qf_ticker in ticker_list:
+                default_ticker_index = ticker_list.index(st.session_state.qf_ticker)
+            
+            selected_ticker = st.selectbox("Ticker", ticker_list, index=default_ticker_index, key="trade_ticker")
             action = st.selectbox("Action", ['BUY', 'SELL', 'DIVIDEND'], key="trade_action")
             
         with form_col2:
-            quantity = st.number_input("Quantity", min_value=1, value=100, key="trade_quantity")
+            quantity = st.number_input("Quantity", min_value=1, value=int(st.session_state.qf_quantity), key="trade_quantity")
             if action == 'DIVIDEND':
                 total_dividend = st.number_input("Total Dividend Amount ($)", min_value=0.01, value=50.00, step=0.01, key="trade_price")
                 price = total_dividend / quantity  # Calculate per-share amount
             else:
-                price = st.number_input("Price ($)", min_value=0.01, value=50.00, step=0.01, key="trade_price")
+                price = st.number_input("Price ($)", min_value=0.01, value=float(st.session_state.qf_price), step=0.01, key="trade_price")
             
         with form_col3:
             trade_date = st.date_input("Date", value=datetime.now().date(), key="trade_date")
@@ -3820,9 +4073,9 @@ st.info("""
 - **0DTE Strategy**: QDTE (QQQ 0DTE) - *⚡ High-yield strategy (50-60% annual)*
 
 **Payment Schedule** (Balanced Distribution):
-- 📅 **6 ETFs** (Tue ex-div): NVDW, AMDW, HOOW, MSFW, GOOW, NFLW → Pay WEDNESDAY
-- 📅 **2 ETFs** (Mon ex-div): TSLW, BRKW → Pay TUESDAY *(Updated 10/30/25)*
-- 📅 **2 ETFs** (Thu ex-div): XOMO, QDTE → Pay FRIDAY
+- 📅 **7 ETFs** (Tue ex-div): NVDW, AMDW, HOOW, MSFW, GOOW, NFLW, NVDY → Pay WEDNESDAY
+- 📅 **3 ETFs** (Mon ex-div): TSLW, BRKW, TSLY → Pay TUESDAY
+- 📅 **4 ETFs** (Thu ex-div): XOMO, QDTE, XDTE, MSTY → Pay FRIDAY *(Updated 11/8/25)*
 
 **Diversification Goal**: 5 sectors, balanced payment schedule, yields 0.75%-1.20% weekly.
 """)
@@ -3913,11 +4166,53 @@ except FileNotFoundError:
         st.success(f"✅ Trade logged: {action} {quantity} shares of {selected_ticker} @ ${price:.2f}")
         st.rerun()
     
-    elif quick_fill and not df_sorted.empty:
-        # Auto-fill with top WeeklyPay pick
-        top_pick = df_sorted.iloc[0]
-        st.info(f"Quick-filled with top pick: {top_pick['Ticker']} (Score: {top_pick['WeeklyPay_Score']:.2f})")
-        # Note: In a real implementation, you'd update the form fields
+    elif quick_fill:
+        # Auto-fill with top pick from next rotation group
+        if ROTATION_ENGINE_AVAILABLE and 'df_next_group' in locals() and not df_next_group.empty:
+            top_pick = df_next_group.iloc[0]
+            group_name = "Next Rotation Group"
+        elif not df_sorted.empty:
+            top_pick = df_sorted.iloc[0]
+            group_name = "All Tickers"
+        else:
+            st.error("No tickers available for Quick Fill")
+            top_pick = None
+        
+        if top_pick is not None:
+            # Get current price for the ticker
+            try:
+                import yfinance as yf
+                stock = yf.Ticker(top_pick['Ticker'])
+                current_price = stock.info.get('currentPrice') or stock.info.get('regularMarketPrice')
+                
+                if current_price:
+                    # Calculate quantity based on investment amount
+                    suggested_quantity = int(investment_amount / current_price)
+                    total_cost = suggested_quantity * current_price
+                    
+                    # Update session state to populate form fields
+                    st.session_state.qf_ticker = top_pick['Ticker']
+                    st.session_state.qf_quantity = suggested_quantity
+                    st.session_state.qf_price = current_price
+                    
+                    st.success(f"""
+                    ✅ **Quick Fill Applied - Top Pick from {group_name}**
+                    
+                    **Ticker:** {top_pick['Ticker']}  
+                    **Score:** {top_pick['WeeklyPay_Score']:.2f}  
+                    **Current Price:** ${current_price:.2f}  
+                    **Quantity:** {suggested_quantity} shares  
+                    **Total Cost:** ${total_cost:,.2f}
+                    
+                    � *Form fields updated above - click "Log Trade" to save*
+                    """)
+                    
+                    # Rerun to update form with new values
+                    st.rerun()
+                else:
+                    st.warning(f"✅ Top Pick: {top_pick['Ticker']} (Score: {top_pick['WeeklyPay_Score']:.2f}) - Price unavailable, please enter manually")
+            except Exception as e:
+                st.warning(f"✅ Top Pick: {top_pick['Ticker']} (Score: {top_pick['WeeklyPay_Score']:.2f}) - Price fetch failed: {e}")
 
 with col2:
     st.markdown("### ℹ️ Trade Entry Info")
@@ -4189,7 +4484,124 @@ if not trades_df.empty and len(trades_df) >= 3:
     trades_df['Date'] = pd.to_datetime(trades_df['Date'])
     
     # Create tabs for different chart views
-    chart_tab1, chart_tab2, chart_tab3, chart_tab4, chart_tab5 = st.tabs(["💰 Cumulative P&L", "📈 Performance by Ticker", "🎯 WeeklyPay Score Analysis", "📊 Trade Distribution", "💵 Income Projections"])
+    chart_tab0, chart_tab1, chart_tab2, chart_tab3, chart_tab4, chart_tab5 = st.tabs(["� Realized Returns", "💰 Total P&L (w/ Unrealized)", "📈 Performance by Ticker", "🎯 WeeklyPay Score Analysis", "📊 Trade Distribution", "💵 Income Projections"])
+    
+    with chart_tab0:
+        st.subheader("💵 Realized Returns Over Time (Cash Only)")
+        
+        st.info("ℹ️ **Cash Performance**: This chart shows only **realized returns** - dividends received plus capital gains/losses from closed positions. Unrealized gains/losses on open positions are NOT included.")
+        
+        # Calculate cumulative realized returns
+        trades_sorted = trades_df.sort_values('Date')
+        
+        # Calculate running totals
+        running_dividends = 0
+        running_realized_gains = 0
+        
+        cumulative_data = []
+        
+        for idx, row in trades_sorted.iterrows():
+            if row['Action'] == 'DIVIDEND':
+                running_dividends += row['Total']
+            
+            # Track realized gains from SELL transactions
+            if row['Action'] == 'SELL':
+                ticker = row['Ticker']
+                # Calculate cost basis for this sale (FIFO)
+                ticker_buys = trades_df[(trades_df['Ticker'] == ticker) & 
+                                       (trades_df['Action'] == 'BUY') & 
+                                       (trades_df['Date'] <= row['Date'])].sort_values('Date')
+                
+                shares_to_match = row['Quantity']
+                cost_basis = 0
+                
+                for _, buy in ticker_buys.iterrows():
+                    if shares_to_match <= 0:
+                        break
+                    shares_used = min(buy['Quantity'], shares_to_match)
+                    cost_basis += shares_used * buy['Price']
+                    shares_to_match -= shares_used
+                
+                sale_proceeds = row['Total']
+                realized_gain = sale_proceeds - cost_basis
+                running_realized_gains += realized_gain
+            
+            total_realized = running_dividends + running_realized_gains
+            
+            cumulative_data.append({
+                'Date': row['Date'],
+                'Dividends': running_dividends,
+                'Realized_Gains': running_realized_gains,
+                'Total_Realized': total_realized
+            })
+        
+        cumulative_df = pd.DataFrame(cumulative_data)
+        
+        # Create the realized returns chart
+        fig_realized = go.Figure()
+        
+        # Add total realized return line
+        fig_realized.add_trace(go.Scatter(
+            x=cumulative_df['Date'],
+            y=cumulative_df['Total_Realized'],
+            mode='lines+markers',
+            name='Total Realized Return',
+            line=dict(color='#28a745', width=3),
+            fill='tozeroy',
+            fillcolor='rgba(40, 167, 69, 0.1)'
+        ))
+        
+        # Add dividends line
+        fig_realized.add_trace(go.Scatter(
+            x=cumulative_df['Date'],
+            y=cumulative_df['Dividends'],
+            mode='lines',
+            name='Dividends Only',
+            line=dict(color='#17a2b8', width=2, dash='dash')
+        ))
+        
+        # Add realized capital gains line
+        fig_realized.add_trace(go.Scatter(
+            x=cumulative_df['Date'],
+            y=cumulative_df['Realized_Gains'],
+            mode='lines',
+            name='Realized Capital Gains',
+            line=dict(color='#ffc107', width=2, dash='dot')
+        ))
+        
+        # Add zero line
+        fig_realized.add_hline(y=0, line_dash="dash", line_color="gray", annotation_text="Break Even")
+        
+        fig_realized.update_layout(
+            title="Realized Returns Over Time (Dividends + Closed Position Gains)",
+            xaxis_title="Date",
+            yaxis_title="Realized Return ($)",
+            height=400,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        st.plotly_chart(fig_realized, use_container_width=True)
+        
+        # Show key metrics
+        final_dividends = cumulative_df['Dividends'].iloc[-1]
+        final_realized_gains = cumulative_df['Realized_Gains'].iloc[-1]
+        final_total_realized = cumulative_df['Total_Realized'].iloc[-1]
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💵 Total Realized Return", f"${final_total_realized:,.2f}")
+        col2.metric("💰 Total Dividends", f"${final_dividends:,.2f}")
+        col3.metric("📈 Realized Capital Gains", f"${final_realized_gains:,.2f}")
+        
+        st.markdown("""
+        **Realized Returns Breakdown:**
+        - **Dividends**: All dividend payments received (from both open and closed positions)
+        - **Realized Capital Gains**: Profit/loss from sold positions only (sale price - cost basis)
+        - **Total Realized Return**: Cash you've actually received or locked in
+        - ❌ **Excludes**: Unrealized gains/losses on current open positions
+        
+        💡 *This represents your actual "cash in pocket" performance.*
+        """)
     
     with chart_tab1:
         st.subheader("💰 Cumulative Profit & Loss Over Time")

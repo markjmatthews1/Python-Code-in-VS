@@ -152,6 +152,7 @@ class OCREngine:
     def _preprocess_image(self, img: Image.Image) -> Image.Image:
         """
         Preprocess image for better OCR results
+        Enhanced to handle difficult images (low quality JPGs, poor lighting, etc.)
         
         Args:
             img: PIL Image object
@@ -160,35 +161,81 @@ class OCREngine:
             Preprocessed image
         """
         try:
+            print(f"DEBUG OCR: Original image size: {img.size}, mode: {img.mode}")
+            
             # Convert to RGB if needed
-            if img.mode != 'RGB':
+            if img.mode not in ('RGB', 'L'):
+                print(f"DEBUG OCR: Converting from {img.mode} to RGB")
                 img = img.convert('RGB')
             
-            # Resize if too small (improves OCR)
+            # Resize if too small or too large (improves OCR)
             width, height = img.size
-            if width < 1000:
-                scale = 1000 / width
+            
+            # If image is very small, scale it up significantly
+            if width < 1500 or height < 1500:
+                target_width = 2000
+                scale = target_width / width
                 new_size = (int(width * scale), int(height * scale))
+                print(f"DEBUG OCR: Upscaling image from {img.size} to {new_size}")
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Enhance contrast
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.5)
+            # If image is huge, scale it down
+            elif width > 4000 or height > 4000:
+                target_width = 3000
+                scale = target_width / width
+                new_size = (int(width * scale), int(height * scale))
+                print(f"DEBUG OCR: Downscaling image from {img.size} to {new_size}")
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Enhance sharpness
-            enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(2.0)
-            
-            # Convert to grayscale
+            # Convert to grayscale first for better processing
+            print(f"DEBUG OCR: Converting to grayscale")
             img = img.convert('L')
             
-            # Apply threshold to make text clearer
-            img = ImageOps.autocontrast(img)
+            # Apply aggressive contrast enhancement
+            print(f"DEBUG OCR: Enhancing contrast")
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(2.0)  # Increased from 1.5
+            
+            # Apply brightness adjustment if image is too dark
+            print(f"DEBUG OCR: Adjusting brightness")
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.2)
+            
+            # Apply strong sharpening
+            print(f"DEBUG OCR: Sharpening image")
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(2.5)  # Increased from 2.0
+            
+            # Auto-contrast to normalize levels
+            print(f"DEBUG OCR: Applying auto-contrast")
+            img = ImageOps.autocontrast(img, cutoff=2)
+            
+            # Apply adaptive thresholding for text extraction
+            # This helps separate text from background
+            print(f"DEBUG OCR: Applying threshold")
+            from PIL import ImageFilter
+            img = img.filter(ImageFilter.SHARPEN)
+            
+            # Try to binarize the image (black text on white background)
+            threshold = 128
+            img = img.point(lambda x: 255 if x > threshold else 0)
+            
+            print(f"DEBUG OCR: Final preprocessed image size: {img.size}, mode: {img.mode}")
+            
+            # Save preprocessed image for debugging
+            debug_path = Path(self.tesseract_available and pytesseract.pytesseract.tesseract_cmd).parent.parent / "data" / "last_preprocessed.png" if hasattr(self, 'tesseract_available') else Path("last_preprocessed.png")
+            try:
+                img.save(debug_path)
+                print(f"DEBUG OCR: Saved preprocessed image to {debug_path}")
+            except:
+                pass
             
             return img
             
         except Exception as e:
-            print(f"Error preprocessing image: {e}")
+            print(f"ERROR preprocessing image: {e}")
+            import traceback
+            traceback.print_exc()
             return img
     
     def extract_structured_data(self, text: str) -> Dict:
@@ -364,62 +411,135 @@ class OCREngine:
             print(f"DEBUG OCR: Ingredients text length: {len(ingredients_text)} chars")
             print(f"DEBUG OCR: Ingredients text preview: '{ingredients_text[:150]}...'")
             
-            # Split by newlines first
+            # IMPROVED: First check if bullet points exist in the text
+            has_bullets = bool(re.search(r'[•◦▪▫○●]', ingredients_text))
+            print(f"DEBUG OCR: Bullet points detected: {has_bullets}")
+            
+            # Try multiple extraction methods in order of reliability
+            extraction_methods = []
+            
+            # Method 1: Split by bullet points (if present)
+            if has_bullets:
+                print("DEBUG OCR: Method 1 - Bullet point extraction")
+                bullet_parts = re.split(r'[•◦▪▫○●]', ingredients_text)
+                temp_ingredients = []
+                for part in bullet_parts:
+                    part = part.strip().lstrip('—-* ')
+                    # Clean up any remaining bullet artifacts
+                    part = re.sub(r'^[\s\-•◦▪▫○●]+', '', part).strip()
+                    if 3 < len(part) < 250 and not part.lower().startswith(('direction', 'instruction', 'preparation')):
+                        temp_ingredients.append(part)
+                if temp_ingredients:
+                    extraction_methods.append(('bullet_points', temp_ingredients))
+                    print(f"DEBUG OCR: Bullet extraction found {len(temp_ingredients)} ingredients")
+            
+            # Method 2: Split by newlines
+            print("DEBUG OCR: Method 2 - Newline extraction")
             lines = ingredients_text.split('\n')
             valid_lines = []
-            
             for line in lines:
                 line = line.strip()
-                # Skip empty lines and lines that look like section headers
+                # Remove leading bullets, dashes, or numbers
+                line = re.sub(r'^[—\-•◦▪▫○●*\d]+\.?\s*', '', line).strip()
+                # Skip empty lines and section headers
                 if (len(line) > 3 and 
                     not line.lower().startswith(('direction', 'instruction', 'preparation', 'method')) and
                     'ingredient' not in line.lower()):
-                    # Remove leading bullets, dashes, or numbers
-                    line = re.sub(r'^[—\-•*\d]+\.?\s*', '', line).strip()
                     if line:
                         valid_lines.append(line)
-            
-            # If we have valid lines, use them
             if valid_lines:
-                result['ingredients'] = valid_lines
-                print(f"DEBUG OCR: Found {len(valid_lines)} ingredients from line breaks")
+                extraction_methods.append(('newlines', valid_lines))
+                print(f"DEBUG OCR: Newline extraction found {len(valid_lines)} ingredients")
+            
+            # Method 3: Pattern-based splitting (measurements)
+            print("DEBUG OCR: Method 3 - Pattern-based extraction")
+            ingredient_pattern = r'(?:^|\s)(\d+(?:/\d+)?(?:\s*-\s*\d+(?:/\d+)?)?\s+(?:cups?|tablespoons?|tbsp?|teaspoons?|tsp?|ounces?|oz|pounds?|lbs?|grams?|g|milliliters?|ml|liters?|l|large|medium|small|whole|cloves?|pinch(?:es)?|cans?|packages?|lbs?))'
+            parts = re.split(ingredient_pattern, ingredients_text, flags=re.IGNORECASE)
+            pattern_ingredients = []
+            for i in range(1, len(parts), 2):
+                if i < len(parts):
+                    ingredient = parts[i]
+                    if i + 1 < len(parts):
+                        ingredient += parts[i + 1]
+                    ingredient = ingredient.strip().lstrip('—-•◦▪▫○●* ').strip()
+                    next_measure = re.search(ingredient_pattern, ingredient[10:], re.IGNORECASE)
+                    if next_measure:
+                        ingredient = ingredient[:10 + next_measure.start()].strip()
+                    if 5 < len(ingredient) < 250:
+                        pattern_ingredients.append(ingredient)
+            if pattern_ingredients:
+                extraction_methods.append(('patterns', pattern_ingredients))
+                print(f"DEBUG OCR: Pattern extraction found {len(pattern_ingredients)} ingredients")
+            
+            # Method 4: Smart splitting by measurement detection (IMPROVED)
+            # This handles cases where ingredients run together in a paragraph
+            print("DEBUG OCR: Method 4 - Smart measurement detection")
+            # Match patterns like: "1 cup flour 2 tbsp sugar 3 eggs"
+            measurement_starts = list(re.finditer(r'\b(\d+(?:/\d+)?(?:\s*-\s*\d+(?:/\d+)?)?\s+(?:cups?|tablespoons?|tbsp?|teaspoons?|tsp?|ounces?|oz|pounds?|lbs?|grams?|g|milliliters?|ml|liters?|l|large|medium|small|whole|cloves?|pinch(?:es)?|cans?|packages?|lbs?))', ingredients_text, re.IGNORECASE))
+            smart_ingredients = []
+            for idx, match in enumerate(measurement_starts):
+                start = match.start()
+                # Find end: either next measurement or end of text
+                if idx + 1 < len(measurement_starts):
+                    end = measurement_starts[idx + 1].start()
+                else:
+                    end = len(ingredients_text)
+                ingredient = ingredients_text[start:end].strip()
+                # Clean up
+                ingredient = re.sub(r'^[—\-•◦▪▫○●*]+', '', ingredient).strip()
+                if 5 < len(ingredient) < 250:
+                    smart_ingredients.append(ingredient)
+            if smart_ingredients:
+                extraction_methods.append(('smart_measurement', smart_ingredients))
+                print(f"DEBUG OCR: Smart measurement detection found {len(smart_ingredients)} ingredients")
+            
+            # Choose the best extraction method
+            # Prefer bullet points if detected, then newlines, then patterns
+            if extraction_methods:
+                # Score each method: bullet points = 3, newlines = 2, others = 1
+                scored_methods = []
+                for method_name, ingredients in extraction_methods:
+                    score = len(ingredients)
+                    if method_name == 'bullet_points':
+                        score *= 3  # Highest priority
+                    elif method_name == 'newlines':
+                        score *= 2  # Second priority
+                    scored_methods.append((score, method_name, ingredients))
+                
+                # Sort by score and pick the best
+                scored_methods.sort(reverse=True, key=lambda x: x[0])
+                best_method = scored_methods[0]
+                result['ingredients'] = best_method[2]
+                print(f"DEBUG OCR: Selected method '{best_method[1]}' with {len(best_method[2])} ingredients (score: {best_method[0]})")
             else:
-                print("DEBUG OCR: No line breaks, trying pattern-based splitting")
-                # Fallback: try to split by ingredient patterns (amounts + units)
-                # Look for patterns like "1 cup", "2 tablespoons", "1/2 teaspoon", etc.
-                ingredient_pattern = r'(?:^|\s)(\d+(?:/\d+)?(?:\s*-\s*\d+(?:/\d+)?)?\s+(?:cups?|tablespoons?|tbsp?|teaspoons?|tsp?|ounces?|oz|pounds?|lbs?|grams?|g|milliliters?|ml|liters?|l|large|medium|small|whole|cloves?|pinch(?:es)?|cans?|packages?|lbs?))'
+                print("DEBUG OCR: No extraction methods succeeded")
+            
+            # Final fallback: just split by periods or semicolons if we still have nothing
+            if not result['ingredients'] and len(ingredients_text) > 10:
+                print("DEBUG OCR: Final fallback - splitting by punctuation")
+                fallback_parts = re.split(r'[.;]', ingredients_text)
+                for part in fallback_parts:
+                    part = part.strip().lstrip('—-•◦▪▫○●* ')
+                    if 5 < len(part) < 250:
+                        result['ingredients'].append(part)
+                print(f"DEBUG OCR: Fallback found {len(result['ingredients'])} ingredients")
+            
+            # CLEANUP: Remove bullet points and filter out unwanted words
+            if result['ingredients']:
+                cleaned_ingredients = []
+                for ingredient in result['ingredients']:
+                    # Remove all bullet point characters from the ingredient text
+                    ingredient = re.sub(r'[•◦▪▫○●]', '', ingredient).strip()
+                    # Remove any leading/trailing dashes, asterisks, etc.
+                    ingredient = ingredient.strip('—-•◦▪▫○●* ').strip()
+                    # Skip if the ingredient is just the word "ingredients" or "ingredient"
+                    if ingredient.lower() not in ['ingredient', 'ingredients']:
+                        # Skip if it's too short or empty after cleaning
+                        if len(ingredient) > 2:
+                            cleaned_ingredients.append(ingredient)
                 
-                # Split ingredients text by common measurement patterns
-                parts = re.split(ingredient_pattern, ingredients_text, flags=re.IGNORECASE)
-                
-                # Recombine parts to form complete ingredients
-                for i in range(1, len(parts), 2):
-                    if i < len(parts):
-                        # Combine the measurement with the next part
-                        ingredient = parts[i]
-                        if i + 1 < len(parts):
-                            ingredient += parts[i + 1]
-                        ingredient = ingredient.strip().lstrip('—-•*').strip()
-                        # Take only up to next ingredient or end
-                        # Look for where next measurement starts
-                        next_measure = re.search(ingredient_pattern, ingredient[10:], re.IGNORECASE)
-                        if next_measure:
-                            ingredient = ingredient[:10 + next_measure.start()].strip()
-                        if len(ingredient) > 5 and len(ingredient) < 200:
-                            result['ingredients'].append(ingredient)
-                
-                print(f"DEBUG OCR: Pattern extraction found {len(result['ingredients'])} ingredients")
-                
-                # If still no ingredients, try simple bullet/newline split
-                if not result['ingredients']:
-                    print("DEBUG OCR: Trying bullet point extraction")
-                    # Look for bullet points or common separators
-                    bullet_parts = re.split(r'[•◦▪▫○●]', ingredients_text)
-                    for part in bullet_parts:
-                        part = part.strip().lstrip('—-* ')
-                        if 5 < len(part) < 200 and not part.lower().startswith(('direction', 'instruction')):
-                            result['ingredients'].append(part)
-                    print(f"DEBUG OCR: Bullet extraction found {len(result['ingredients'])} ingredients")
+                result['ingredients'] = cleaned_ingredients
+                print(f"DEBUG OCR: After cleanup: {len(result['ingredients'])} ingredients remain")
         
         # Extract directions section
         if directions_pos > 0:

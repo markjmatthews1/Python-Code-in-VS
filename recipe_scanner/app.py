@@ -8,6 +8,7 @@ from tkinter import messagebox, filedialog
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 from PIL import Image, ImageTk
 from database.db_manager import DatabaseManager
 from scanner.scanner_interface import ScannerInterface
@@ -198,6 +199,8 @@ class RecipeScannerApp(ctk.CTk):
         """Clear the content area"""
         for widget in self.content_frame.winfo_children():
             widget.destroy()
+        # Force geometry update to reset layout
+        self.content_frame.update_idletasks()
     
     def update_status(self, message):
         """Update status bar message"""
@@ -721,65 +724,127 @@ class RecipeScannerApp(ctk.CTk):
     def show_list_tab(self):
         """Display grocery list tab"""
         self.clear_content()
-        self.update_status("Grocery List")
+        self.update_status("Grocery List Generator")
+        
+        # Initialize selected recipes if not already done
+        if not hasattr(self, 'selected_recipe_ids'):
+            self.selected_recipe_ids = set()
+        
+        # Check if we're viewing a generated list
+        if hasattr(self, 'viewing_grocery_list') and self.viewing_grocery_list:
+            self.display_generated_grocery_list()
+            return
+        
+        # Main container - use same packing as generated list view
+        main_container = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        main_container.pack(fill="both", expand=True, padx=20, pady=10)
         
         # Title
         title = ctk.CTkLabel(
-            self.content_frame,
+            main_container,
             text="📝 Grocery List Generator",
-            font=("Helvetica", 28, "bold"),
+            font=("Helvetica", 24, "bold"),
             text_color=self.colors['primary']
         )
-        title.pack(pady=30)
+        title.pack(pady=(5, 10))
         
         # Instructions
         instructions = ctk.CTkLabel(
-            self.content_frame,
+            main_container,
             text="Select recipes below to generate a combined shopping list",
-            font=("Helvetica", 16),
+            font=("Helvetica", 14),
             text_color=self.colors['text_dark']
         )
-        instructions.pack(pady=10)
+        instructions.pack(pady=(0, 10))
         
-        # Recipe selection area
-        selection_frame = ctk.CTkFrame(self.content_frame, fg_color=self.colors['card_bg'], corner_radius=15)
-        selection_frame.pack(fill="both", expand=True, padx=40, pady=20)
+        # Search and filter bar
+        search_frame = ctk.CTkFrame(main_container, fg_color=self.colors['card_bg'], corner_radius=10)
+        search_frame.pack(fill="x", pady=(0, 5))
         
-        no_recipes = ctk.CTkLabel(
-            selection_frame,
-            text="📋\n\nNo recipes available\n\nAdd recipes first to generate grocery lists",
-            font=("Helvetica", 16),
-            text_color=self.colors['text_dark']
+        # Search entry
+        search_container = ctk.CTkFrame(search_frame, fg_color="transparent")
+        search_container.pack(side="left", padx=20, pady=15)
+        
+        search_label = ctk.CTkLabel(
+            search_container,
+            text="�",
+            font=("Helvetica", 18)
         )
-        no_recipes.pack(pady=100)
+        search_label.pack(side="left", padx=(0, 10))
         
-        # Action buttons
-        button_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        button_frame.pack(pady=20)
+        self.list_search_entry = ctk.CTkEntry(
+            search_container,
+            placeholder_text="Search recipes...",
+            width=300,
+            height=35,
+            font=("Helvetica", 14)
+        )
+        self.list_search_entry.pack(side="left")
+        self.list_search_entry.bind('<KeyRelease>', lambda e: self.refresh_recipe_selection_list())
         
-        generate_btn = ctk.CTkButton(
-            button_frame,
-            text="✨ Generate List",
+        # Selection controls
+        controls_container = ctk.CTkFrame(search_frame, fg_color="transparent")
+        controls_container.pack(side="right", padx=20, pady=15)
+        
+        select_all_btn = ctk.CTkButton(
+            controls_container,
+            text="✓ Select All",
+            width=120,
+            height=35,
+            font=("Helvetica", 14),
+            fg_color=self.colors['secondary'],
+            command=self.select_all_recipes
+        )
+        select_all_btn.pack(side="left", padx=5)
+        
+        clear_btn = ctk.CTkButton(
+            controls_container,
+            text="✗ Clear All",
+            width=120,
+            height=35,
+            font=("Helvetica", 14),
+            fg_color=self.colors['accent'],
+            command=self.clear_all_recipes
+        )
+        clear_btn.pack(side="left", padx=5)
+        
+        # Recipe selection area (scrollable) - Use both to expand but not push button off screen
+        self.recipe_selection_frame = ctk.CTkScrollableFrame(
+            main_container,
+            fg_color=self.colors['card_bg'],
+            corner_radius=15
+        )
+        self.recipe_selection_frame.pack(fill="both", expand=True, pady=(0, 5))
+        
+        # Bottom section with count and button - Create BEFORE loading recipes
+        bottom_section = ctk.CTkFrame(main_container, fg_color="transparent")
+        bottom_section.pack(fill="x", pady=(5, 0))
+        
+        # Selected count display
+        self.selected_count_label = ctk.CTkLabel(
+            bottom_section,
+            text=f"Selected: {len(self.selected_recipe_ids)} recipes",
             font=("Helvetica", 16, "bold"),
-            width=200,
-            height=50,
-            corner_radius=10,
+            text_color=self.colors['primary']
+        )
+        self.selected_count_label.pack(pady=(5, 10))
+        
+        # Generate button - Centered and prominent
+        generate_btn = ctk.CTkButton(
+            bottom_section,
+            text="✨ Generate Grocery List",
+            font=("Helvetica", 18, "bold"),
+            width=280,
+            height=55,
+            corner_radius=12,
             fg_color=self.colors['primary'],
+            hover_color="#27AE60",
             command=self.generate_grocery_list
         )
-        generate_btn.pack(side="left", padx=10)
+        generate_btn.pack(pady=(0, 10))
         
-        print_btn = ctk.CTkButton(
-            button_frame,
-            text="🖨️ Print",
-            font=("Helvetica", 16, "bold"),
-            width=150,
-            height=50,
-            corner_radius=10,
-            fg_color=self.colors['secondary'],
-            command=self.print_grocery_list
-        )
-        print_btn.pack(side="left", padx=10)
+        # Load recipes AFTER creating the label so it can be updated
+        self.refresh_recipe_selection_list()
     
     # ========== FUNCTIONALITY METHODS ==========
     
@@ -793,22 +858,47 @@ class RecipeScannerApp(ctk.CTk):
         
         # Show Windows scan dialog
         try:
-            image_path = self.scanner.scan_with_dialog()
+            # scan_with_dialog now returns a list of image paths
+            scanned_images = self.scanner.scan_with_dialog()
             
-            if image_path:
-                self.current_scanned_image = image_path
-                self.update_status(f"Scan complete: {Path(image_path).name}")
+            if scanned_images:
+                # Handle single or multiple pages
+                num_pages = len(scanned_images)
                 
-                # Show preview
-                self.display_scanned_preview(image_path)
-                
-                # Ask if user wants to process with OCR
-                result = messagebox.askyesno(
-                    "Scan Complete",
-                    "Recipe scanned successfully!\n\nWould you like to process it with OCR now?"
-                )
-                if result:
-                    self.process_scanned_image()
+                if num_pages == 1:
+                    # Single page scan
+                    self.current_scanned_image = scanned_images[0]
+                    self.scanned_pages = []  # Clear any previous pages
+                    self.update_status(f"Scan complete: {Path(scanned_images[0]).name}")
+                    
+                    # Show preview
+                    self.display_scanned_preview(scanned_images[0])
+                    
+                    # Ask if user wants to process with OCR
+                    result = messagebox.askyesno(
+                        "Scan Complete",
+                        "Recipe scanned successfully!\n\nWould you like to process it with OCR now?"
+                    )
+                    if result:
+                        self.process_scanned_image()
+                else:
+                    # Multiple pages scanned
+                    self.scanned_pages = scanned_images[:-1]  # All but last
+                    self.current_scanned_image = scanned_images[-1]  # Last page
+                    self.update_status(f"Scan complete: {num_pages} pages scanned")
+                    
+                    # Show preview of last page
+                    self.display_scanned_preview(scanned_images[-1])
+                    
+                    # Ask if user wants to process all pages with OCR
+                    result = messagebox.askyesno(
+                        "Multi-Page Scan Complete",
+                        f"{num_pages} pages scanned successfully from document feeder!\n\n"
+                        f"Pages scanned: {num_pages}\n\n"
+                        f"Would you like to process all pages with OCR now?"
+                    )
+                    if result:
+                        self.process_scanned_image()
             else:
                 self.update_status("Scan cancelled")
                 
@@ -829,21 +919,41 @@ class RecipeScannerApp(ctk.CTk):
             if self.current_scanned_image and self.current_scanned_image not in self.scanned_pages:
                 self.scanned_pages.append(self.current_scanned_image)
             
-            # Scan new page
-            image_path = self.scanner.scan_with_dialog()
+            # Scan new page(s) - may return multiple if using feeder
+            scanned_images = self.scanner.scan_with_dialog()
             
-            if image_path:
-                self.current_scanned_image = image_path
-                page_num = len(self.scanned_pages) + 1
-                self.update_status(f"Page {page_num} scanned")
+            if scanned_images:
+                num_new_pages = len(scanned_images)
                 
-                # Show preview
-                self.display_scanned_preview(image_path)
-                
-                messagebox.showinfo(
-                    "Page Scanned",
-                    f"Page {page_num} scanned successfully!\n\nYou can:\n• Scan more pages (click 'Scan Next Page')\n• Process all pages with OCR (click 'Process with OCR')"
-                )
+                if num_new_pages == 1:
+                    # Single page
+                    self.current_scanned_image = scanned_images[0]
+                    page_num = len(self.scanned_pages) + 1
+                    self.update_status(f"Page {page_num} scanned")
+                    
+                    # Show preview
+                    self.display_scanned_preview(scanned_images[0])
+                    
+                    messagebox.showinfo(
+                        "Page Scanned",
+                        f"Page {page_num} scanned successfully!\n\nYou can:\n• Scan more pages (click 'Scan Next Page')\n• Process all pages with OCR (click 'Process with OCR')"
+                    )
+                else:
+                    # Multiple pages from feeder
+                    self.scanned_pages.extend(scanned_images[:-1])
+                    self.current_scanned_image = scanned_images[-1]
+                    total_pages = len(self.scanned_pages) + 1
+                    self.update_status(f"{num_new_pages} pages scanned (total: {total_pages})")
+                    
+                    # Show preview of last page
+                    self.display_scanned_preview(scanned_images[-1])
+                    
+                    messagebox.showinfo(
+                        "Pages Scanned",
+                        f"{num_new_pages} additional pages scanned from feeder!\n\n"
+                        f"Total pages: {total_pages}\n\n"
+                        f"You can:\n• Scan more pages (click 'Scan Next Page')\n• Process all pages with OCR (click 'Process with OCR')"
+                    )
             else:
                 self.update_status("Scan cancelled")
                 
@@ -852,41 +962,72 @@ class RecipeScannerApp(ctk.CTk):
             self.update_status("Scan failed")
     
     def import_image(self):
-        """Import an existing image file"""
+        """Import an existing image or PDF file"""
         file_path = filedialog.askopenfilename(
-            title="Select Recipe Image",
+            title="Select Recipe Image or PDF",
             filetypes=[
+                ("Recipe files", "*.png *.jpg *.jpeg *.bmp *.gif *.tiff *.pdf"),
                 ("Image files", "*.png *.jpg *.jpeg *.bmp *.gif *.tiff"),
+                ("PDF files", "*.pdf"),
                 ("All files", "*.*")
             ]
         )
         
         if file_path:
-            self.update_status("Importing image...")
+            # Check if it's a PDF
+            is_pdf = file_path.lower().endswith('.pdf')
+            
+            if is_pdf:
+                self.update_status("Converting PDF to images...")
+            else:
+                self.update_status("Importing image...")
+            
             try:
-                # Copy to scanned images directory
-                imported_path = self.scanner.scan_from_file(file_path)
+                # Import file (handles both images and PDFs)
+                imported_paths = self.scanner.scan_from_file(file_path)
                 
-                if imported_path:
-                    self.current_scanned_image = imported_path
-                    self.update_status(f"Imported: {Path(file_path).name}")
+                if imported_paths:
+                    num_pages = len(imported_paths)
                     
-                    # Show preview
-                    self.display_scanned_preview(imported_path)
+                    if num_pages == 1:
+                        # Single page/image
+                        self.current_scanned_image = imported_paths[0]
+                        self.scanned_pages = []
+                        self.update_status(f"Imported: {Path(file_path).name}")
+                        
+                        # Show preview
+                        self.display_scanned_preview(imported_paths[0])
+                        
+                        # Ask if user wants to process with OCR
+                        result = messagebox.askyesno(
+                            "Import Complete",
+                            f"{'PDF converted' if is_pdf else 'Image imported'} successfully!\n\nWould you like to process it with OCR now?"
+                        )
+                        if result:
+                            self.process_scanned_image()
                     
-                    # Ask if user wants to process with OCR
-                    result = messagebox.askyesno(
-                        "Import Complete",
-                        "Image imported successfully!\n\nWould you like to process it with OCR now?"
-                    )
-                    if result:
-                        self.process_scanned_image()
+                    else:
+                        # Multi-page PDF
+                        self.scanned_pages = imported_paths[:-1]
+                        self.current_scanned_image = imported_paths[-1]
+                        self.update_status(f"Imported {num_pages} pages from PDF")
+                        
+                        # Show preview of last page
+                        self.display_scanned_preview(imported_paths[-1])
+                        
+                        # Ask if user wants to process with OCR
+                        result = messagebox.askyesno(
+                            "Import Complete",
+                            f"PDF converted to {num_pages} pages!\n\nWould you like to process all pages with OCR now?"
+                        )
+                        if result:
+                            self.process_scanned_image()
                 else:
-                    messagebox.showerror("Import Error", "Failed to import image")
+                    messagebox.showerror("Import Error", "Failed to import file")
                     self.update_status("Import failed")
                     
             except Exception as e:
-                messagebox.showerror("Import Error", f"Error importing image:\n{str(e)}")
+                messagebox.showerror("Import Error", f"Error importing file:\n{str(e)}")
                 self.update_status("Import failed")
     
     def display_scanned_preview(self, image_path):
@@ -1902,15 +2043,569 @@ class RecipeScannerApp(ctk.CTk):
         
         messagebox.showinfo("Match Details", msg)
     
+    def refresh_recipe_selection_list(self):
+        """Refresh the recipe selection list with checkboxes"""
+        # Clear existing widgets
+        for widget in self.recipe_selection_frame.winfo_children():
+            widget.destroy()
+        
+        # Get search term
+        search_term = ""
+        if hasattr(self, 'list_search_entry'):
+            search_term = self.list_search_entry.get().strip().lower()
+        
+        # Get all recipes
+        all_recipes = self.db.get_all_recipes()
+        
+        # Filter by search term
+        if search_term:
+            filtered_recipes = [
+                r for r in all_recipes 
+                if search_term in r['name'].lower() or 
+                (r['category'] and search_term in r['category'].lower())
+            ]
+        else:
+            filtered_recipes = all_recipes
+        
+        if not filtered_recipes:
+            # No recipes found
+            no_recipes = ctk.CTkLabel(
+                self.recipe_selection_frame,
+                text="📭\n\nNo recipes found!\n\nTry adjusting your search or add recipes first.",
+                font=("Helvetica", 18),
+                text_color=self.colors['text_dark']
+            )
+            no_recipes.pack(pady=100)
+        else:
+            # Display recipes with checkboxes
+            for recipe in filtered_recipes:
+                recipe_id = recipe['id']
+                
+                # Recipe card
+                recipe_card = ctk.CTkFrame(
+                    self.recipe_selection_frame,
+                    fg_color=self.colors['bg_light'],
+                    corner_radius=10
+                )
+                recipe_card.pack(fill="x", padx=10, pady=5)
+                
+                # Checkbox
+                is_selected = recipe_id in self.selected_recipe_ids
+                checkbox_var = ctk.BooleanVar(value=is_selected)
+                
+                checkbox = ctk.CTkCheckBox(
+                    recipe_card,
+                    text="",
+                    variable=checkbox_var,
+                    width=30,
+                    command=lambda rid=recipe_id, var=checkbox_var: self.toggle_recipe_selection(rid, var)
+                )
+                checkbox.pack(side="left", padx=15, pady=15)
+                
+                # Recipe info
+                info_frame = ctk.CTkFrame(recipe_card, fg_color="transparent")
+                info_frame.pack(side="left", fill="x", expand=True, pady=10)
+                
+                # Recipe name
+                name_label = ctk.CTkLabel(
+                    info_frame,
+                    text=recipe['name'],
+                    font=("Helvetica", 16, "bold"),
+                    text_color="#1E90FF",
+                    anchor="w"
+                )
+                name_label.pack(anchor="w")
+                
+                # Recipe details
+                details = []
+                if recipe.get('category'):
+                    details.append(f"📁 {recipe['category']}")
+                if recipe.get('servings'):
+                    details.append(f"🍽️ {recipe['servings']}")
+                
+                # Get ingredient count
+                ingredients = self.db.get_ingredients(recipe_id)
+                details.append(f"🛒 {len(ingredients)} ingredients")
+                
+                details_text = " • ".join(details)
+                details_label = ctk.CTkLabel(
+                    info_frame,
+                    text=details_text,
+                    font=("Helvetica", 12),
+                    text_color=self.colors['text_dark'],
+                    anchor="w"
+                )
+                details_label.pack(anchor="w", pady=(5, 0))
+        
+        # Update count if label exists
+        if hasattr(self, 'selected_count_label'):
+            self.selected_count_label.configure(text=f"Selected: {len(self.selected_recipe_ids)} recipes")
+    
+    def toggle_recipe_selection(self, recipe_id, checkbox_var):
+        """Toggle recipe selection"""
+        if checkbox_var.get():
+            self.selected_recipe_ids.add(recipe_id)
+        else:
+            self.selected_recipe_ids.discard(recipe_id)
+        
+        # Update count
+        if hasattr(self, 'selected_count_label'):
+            self.selected_count_label.configure(text=f"Selected: {len(self.selected_recipe_ids)} recipes")
+    
+    def select_all_recipes(self):
+        """Select all visible recipes"""
+        # Get search term
+        search_term = ""
+        if hasattr(self, 'list_search_entry'):
+            search_term = self.list_search_entry.get().strip().lower()
+        
+        # Get all recipes
+        all_recipes = self.db.get_all_recipes()
+        
+        # Filter by search term
+        if search_term:
+            filtered_recipes = [
+                r for r in all_recipes 
+                if search_term in r['name'].lower() or 
+                (r['category'] and search_term in r['category'].lower())
+            ]
+        else:
+            filtered_recipes = all_recipes
+        
+        # Add all filtered recipe IDs
+        for recipe in filtered_recipes:
+            self.selected_recipe_ids.add(recipe['id'])
+        
+        # Refresh display
+        self.refresh_recipe_selection_list()
+        self.update_status(f"Selected {len(self.selected_recipe_ids)} recipes")
+    
+    def clear_all_recipes(self):
+        """Clear all recipe selections"""
+        self.selected_recipe_ids.clear()
+        self.refresh_recipe_selection_list()
+        self.update_status("Cleared all selections")
+    
     def generate_grocery_list(self):
-        """Generate combined grocery list"""
-        messagebox.showinfo("Generate", "Grocery list generation will be implemented next!")
-        self.update_status("Generating list...")
+        """Generate combined grocery list from selected recipes"""
+        if not self.selected_recipe_ids:
+            messagebox.showwarning("No Recipes", "Please select at least one recipe to generate a grocery list!")
+            return
+        
+        try:
+            # Create shopping list in database
+            list_name = f"Grocery List - {datetime.now().strftime('%B %d, %Y')}"
+            list_id = self.db.create_shopping_list(list_name, list(self.selected_recipe_ids))
+            
+            # Store current list ID
+            self.current_grocery_list_id = list_id
+            self.viewing_grocery_list = True
+            
+            # Show the generated list
+            self.show_list_tab()
+            self.update_status(f"Generated list from {len(self.selected_recipe_ids)} recipes")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate grocery list:\n{str(e)}")
+            self.update_status("Error generating list")
+    
+    def display_generated_grocery_list(self):
+        """Display the generated grocery list"""
+        # Main container - don't let it expand
+        main_container = ctk.CTkFrame(self.content_frame, fg_color="transparent", height=750)
+        main_container.pack(fill="x", padx=20, pady=10)
+        main_container.pack_propagate(False)
+        
+        # Header with back button
+        header_frame = ctk.CTkFrame(main_container, fg_color="transparent")
+        header_frame.pack(fill="x", pady=(5, 15))
+        
+        back_btn = ctk.CTkButton(
+            header_frame,
+            text="← Back to Selection",
+            font=("Helvetica", 14),
+            width=150,
+            height=35,
+            fg_color=self.colors['accent'],
+            command=self.return_to_recipe_selection
+        )
+        back_btn.pack(side="left")
+        
+        # Title
+        title = ctk.CTkLabel(
+            header_frame,
+            text="🛒 Your Grocery List",
+            font=("Helvetica", 28, "bold"),
+            text_color=self.colors['primary']
+        )
+        title.pack(side="left", padx=20)
+        
+        # Get list items organized by category
+        items = self.db.get_shopping_list_items(self.current_grocery_list_id, organized=True)
+        
+        # Recipe names section
+        recipes_frame = ctk.CTkFrame(main_container, fg_color=self.colors['secondary'], corner_radius=10)
+        recipes_frame.pack(fill="x", pady=(0, 10))
+        
+        recipes_title = ctk.CTkLabel(
+            recipes_frame,
+            text="� Recipes in this list:",
+            font=("Helvetica", 16, "bold"),
+            text_color="white"
+        )
+        recipes_title.pack(pady=(10, 8), padx=20, anchor="w")
+        
+        # Get and display recipe names
+        for recipe_id in self.selected_recipe_ids:
+            recipe = self.db.get_recipe(recipe_id)
+            if recipe:
+                recipe_label = ctk.CTkLabel(
+                    recipes_frame,
+                    text=f"  • {recipe['name']}",
+                    font=("Helvetica", 13, "bold"),
+                    text_color="#1E90FF",
+                    anchor="w"
+                )
+                recipe_label.pack(pady=1, padx=20, anchor="w")
+        
+        # Add bottom padding
+        ctk.CTkLabel(recipes_frame, text="", height=8).pack()
+        
+        # Info banner
+        info_frame = ctk.CTkFrame(main_container, fg_color=self.colors['card_bg'], corner_radius=10)
+        info_frame.pack(fill="x", pady=(0, 8))
+        
+        info_text = f"📋 {len(items)} items"
+        info_label = ctk.CTkLabel(
+            info_frame,
+            text=info_text,
+            font=("Helvetica", 15),
+            text_color=self.colors['text_dark']
+        )
+        info_label.pack(pady=10)
+        
+        # Scrollable list - Fixed height to keep buttons visible
+        list_frame = ctk.CTkScrollableFrame(
+            main_container,
+            fg_color=self.colors['card_bg'],
+            corner_radius=15,
+            height=320
+        )
+        list_frame.pack(fill="x", pady=(0, 10))
+        
+        if not items:
+            no_items = ctk.CTkLabel(
+                list_frame,
+                text="No items in this list",
+                font=("Helvetica", 16),
+                text_color=self.colors['text_dark']
+            )
+            no_items.pack(pady=50)
+        else:
+            # Organize items by category for display
+            current_category = None
+            
+            for item in items:
+                category = item.get('category', 'Other')
+                if not category:
+                    category = 'Other'
+                
+                # Show category header when it changes
+                if category != current_category:
+                    current_category = category
+                    category_header = ctk.CTkLabel(
+                        list_frame,
+                        text=f"📦 {category}",
+                        font=("Helvetica", 18, "bold"),
+                        text_color=self.colors['primary'],
+                        anchor="w"
+                    )
+                    category_header.pack(fill="x", padx=10, pady=(15, 10))
+                
+                # Item card
+                item_card = ctk.CTkFrame(
+                    list_frame,
+                    fg_color=self.colors['bg_light'],
+                    corner_radius=8
+                )
+                item_card.pack(fill="x", padx=10, pady=3)
+                
+                # Checkbox for marking as purchased
+                is_checked = item.get('is_checked', 0) == 1
+                checkbox_var = ctk.BooleanVar(value=is_checked)
+                
+                checkbox = ctk.CTkCheckBox(
+                    item_card,
+                    text="",
+                    variable=checkbox_var,
+                    width=30,
+                    command=lambda item_id=item['id']: self.db.toggle_shopping_item(item_id)
+                )
+                checkbox.pack(side="left", padx=15, pady=10)
+                
+                # Item text
+                item_text = item['ingredient_text']
+                if item.get('quantity') and item.get('unit'):
+                    item_text = f"{item['quantity']} {item['unit']} {item_text}"
+                elif item.get('quantity'):
+                    item_text = f"{item['quantity']} {item_text}"
+                
+                text_label = ctk.CTkLabel(
+                    item_card,
+                    text=item_text,
+                    font=("Helvetica", 15),
+                    text_color=self.colors['text_dark'],
+                    anchor="w"
+                )
+                text_label.pack(side="left", fill="x", expand=True, padx=(0, 15))
+        
+        # Action buttons - Fixed section at bottom
+        button_section = ctk.CTkFrame(main_container, fg_color="transparent")
+        button_section.pack(fill="x", pady=(10, 0))
+        
+        button_frame = ctk.CTkFrame(button_section, fg_color="transparent")
+        button_frame.pack()
+        
+        print_btn = ctk.CTkButton(
+            button_frame,
+            text="🖨️ Print List",
+            font=("Helvetica", 18, "bold"),
+            width=200,
+            height=55,
+            corner_radius=10,
+            fg_color=self.colors['secondary'],
+            hover_color="#E67E22",
+            command=self.print_grocery_list
+        )
+        print_btn.pack(side="left", padx=10)
+        
+        new_list_btn = ctk.CTkButton(
+            button_frame,
+            text="✨ New List",
+            font=("Helvetica", 18, "bold"),
+            width=200,
+            height=55,
+            corner_radius=10,
+            fg_color=self.colors['primary'],
+            hover_color="#27AE60",
+            command=self.create_new_grocery_list
+        )
+        new_list_btn.pack(side="left", padx=10)
+    
+    def return_to_recipe_selection(self):
+        """Return to recipe selection view"""
+        self.viewing_grocery_list = False
+        self.show_list_tab()
+    
+    def create_new_grocery_list(self):
+        """Create a new grocery list"""
+        self.selected_recipe_ids.clear()
+        self.viewing_grocery_list = False
+        self.show_list_tab()
+        self.update_status("Ready to create new list")
     
     def print_grocery_list(self):
         """Print grocery list"""
-        messagebox.showinfo("Print", "Print functionality will be implemented next!")
-        self.update_status("Preparing to print...")
+        if not hasattr(self, 'current_grocery_list_id'):
+            messagebox.showwarning("No List", "No grocery list to print!")
+            return
+        
+        try:
+            items = self.db.get_shopping_list_items(self.current_grocery_list_id)
+            
+            # Generate HTML for printing
+            html = self._generate_grocery_list_html(items)
+            
+            # Save to temporary file
+            temp_html = Path("data") / "temp_grocery_list.html"
+            temp_html.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(temp_html, 'w', encoding='utf-8') as f:
+                f.write(html)
+            
+            # Open in browser
+            import webbrowser
+            webbrowser.open(f'file:///{temp_html.absolute()}')
+            
+            messagebox.showinfo(
+                "Print Ready",
+                f"Grocery list opened in your browser.\n\n"
+                "Use Ctrl+P or the browser's print button to print."
+            )
+            
+        except Exception as e:
+            messagebox.showerror("Print Error", f"Could not prepare list for printing:\n{str(e)}")
+    
+    def _generate_grocery_list_html(self, items):
+        """Generate HTML for printing grocery list with recipe titles and categories"""
+        now = datetime.now().strftime('%B %d, %Y')
+        
+        # Get recipe names for the selected recipes
+        recipe_names = []
+        for recipe_id in self.selected_recipe_ids:
+            recipe = self.db.get_recipe(recipe_id)
+            if recipe:
+                recipe_names.append(recipe['name'])
+        
+        # Organize items by category
+        categorized_items = {}
+        for item in items:
+            category = item.get('category', 'Other')
+            if not category:
+                category = 'Other'
+            if category not in categorized_items:
+                categorized_items[category] = []
+            categorized_items[category].append(item)
+        
+        # Category order
+        category_order = ['Produce', 'Meat & Poultry', 'Seafood', 'Dairy', 'Bakery', 'Frozen', 'Pantry', 'Other']
+        
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Grocery List - {now}</title>
+    <style>
+        @media print {{
+            @page {{ margin: 0.75in; }}
+        }}
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }}
+        .header {{
+            text-align: center;
+            border-bottom: 3px solid #2ECC71;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }}
+        h1 {{
+            color: #2ECC71;
+            margin: 0;
+            font-size: 32px;
+        }}
+        .date {{
+            color: #666;
+            font-size: 16px;
+            margin-top: 10px;
+        }}
+        .recipes-section {{
+            background: #f0f9f4;
+            border-left: 4px solid #2ECC71;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }}
+        .recipes-title {{
+            font-weight: bold;
+            color: #2ECC71;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }}
+        .recipe-name {{
+            color: #1E90FF;
+            font-size: 15px;
+            font-weight: bold;
+            margin: 5px 0;
+            padding-left: 10px;
+        }}
+        .category-section {{
+            margin: 30px 0;
+        }}
+        .category-title {{
+            font-size: 20px;
+            font-weight: bold;
+            color: #2ECC71;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #2ECC71;
+        }}
+        .items {{
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }}
+        .item {{
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: #f8f8f8;
+            border-radius: 8px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+        }}
+        .checkbox {{
+            width: 20px;
+            height: 20px;
+            border: 2px solid #2ECC71;
+            border-radius: 4px;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }}
+        .footer {{
+            margin-top: 40px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛒 Grocery List</h1>
+        <div class="date">{now}</div>
+        <div class="date">{len(items)} items from {len(self.selected_recipe_ids)} recipes</div>
+    </div>
+    
+    <div class="recipes-section">
+        <div class="recipes-title">📖 Recipes in this list:</div>
+"""
+        
+        for recipe_name in recipe_names:
+            html += f"""        <div class="recipe-name">• {recipe_name}</div>\n"""
+        
+        html += """    </div>
+    
+"""
+        
+        # Add items organized by category
+        for category in category_order:
+            if category in categorized_items:
+                items_in_category = categorized_items[category]
+                html += f"""    <div class="category-section">
+        <div class="category-title">{category}</div>
+        <ul class="items">
+"""
+                
+                for item in items_in_category:
+                    item_text = item['ingredient_text']
+                    if item.get('quantity') and item.get('unit'):
+                        item_text = f"{item['quantity']} {item['unit']} {item_text}"
+                    elif item.get('quantity'):
+                        item_text = f"{item['quantity']} {item_text}"
+                    
+                    html += f"""            <li class="item">
+                <div class="checkbox"></div>
+                <span>{item_text}</span>
+            </li>
+"""
+                
+                html += """        </ul>
+    </div>
+"""
+        
+        html += """    
+    <div class="footer">
+        Generated by Recipe Scanner Pro
+    </div>
+</body>
+</html>"""
+        
+        return html
     
     def print_recipe(self, recipe_id):
         """Print a recipe with image (if available)"""
@@ -2589,7 +3284,7 @@ class RecipeScannerApp(ctk.CTk):
             info_frame,
             text=title_text,
             font=("Helvetica", 18, "bold"),
-            text_color=self.colors['primary'],
+            text_color="#1E90FF",
             anchor="w"
         )
         name_label.pack(side="left", fill="x", expand=True)

@@ -5,9 +5,11 @@ Handles all SQLite database operations
 
 import sqlite3
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+from fractions import Fraction
 
 
 class DatabaseManager:
@@ -124,6 +126,7 @@ class DatabaseManager:
                 ingredient_text TEXT NOT NULL,
                 quantity TEXT,
                 unit TEXT,
+                category TEXT DEFAULT '',
                 is_checked INTEGER DEFAULT 0,
                 FOREIGN KEY (list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE
             )
@@ -131,13 +134,13 @@ class DatabaseManager:
         
         self.connection.commit()
         
-        # Migrate existing databases - add variations column if it doesn't exist
+        # Migrate existing databases - add missing columns if they don't exist
         self._migrate_database()
     
     def _migrate_database(self):
         """Add any missing columns to existing databases"""
         try:
-            # Check if variations column exists
+            # Check if variations column exists in recipes
             self.cursor.execute("PRAGMA table_info(recipes)")
             columns = [column[1] for column in self.cursor.fetchall()]
             
@@ -145,6 +148,15 @@ class DatabaseManager:
                 self.cursor.execute("ALTER TABLE recipes ADD COLUMN variations TEXT")
                 self.connection.commit()
                 print("Database migrated: Added 'variations' column to recipes table")
+            
+            # Check if category column exists in shopping_list_items
+            self.cursor.execute("PRAGMA table_info(shopping_list_items)")
+            columns = [column[1] for column in self.cursor.fetchall()]
+            
+            if 'category' not in columns:
+                self.cursor.execute("ALTER TABLE shopping_list_items ADD COLUMN category TEXT DEFAULT ''")
+                self.connection.commit()
+                print("Database migrated: Added 'category' column to shopping_list_items table")
         except Exception as e:
             print(f"Migration check: {e}")
     
@@ -478,7 +490,7 @@ class DatabaseManager:
     # ========== SHOPPING LIST OPERATIONS ==========
     
     def create_shopping_list(self, list_name: str, recipe_ids: List[int] = None) -> int:
-        """Create a new shopping list from recipes"""
+        """Create a new shopping list from recipes with smart consolidation"""
         now = datetime.now().isoformat()
         
         self.cursor.execute("""
@@ -488,33 +500,209 @@ class DatabaseManager:
         list_id = self.cursor.lastrowid
         
         if recipe_ids:
-            # Collect all ingredients from selected recipes
-            ingredients_map = {}
-            
-            for recipe_id in recipe_ids:
-                ingredients = self.get_ingredients(recipe_id)
-                for ing in ingredients:
-                    text = ing['ingredient_text']
-                    # Simple consolidation (can be improved)
-                    if text in ingredients_map:
-                        ingredients_map[text]['count'] += 1
-                    else:
-                        ingredients_map[text] = {
-                            'text': text,
-                            'quantity': ing.get('quantity', ''),
-                            'unit': ing.get('unit', ''),
-                            'count': 1
-                        }
+            # Collect all ingredients from selected recipes with smart consolidation
+            ingredients_map = self._consolidate_ingredients(recipe_ids)
             
             # Add to shopping list
             for ing_data in ingredients_map.values():
                 self.cursor.execute("""
-                    INSERT INTO shopping_list_items (list_id, ingredient_text, quantity, unit)
-                    VALUES (?, ?, ?, ?)
-                """, (list_id, ing_data['text'], ing_data['quantity'], ing_data['unit']))
+                    INSERT INTO shopping_list_items (list_id, ingredient_text, quantity, unit, category)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (list_id, ing_data['text'], ing_data['quantity'], ing_data['unit'], ing_data.get('category', '')))
         
         self.connection.commit()
         return list_id
+    
+    def _consolidate_ingredients(self, recipe_ids: List[int]) -> Dict:
+        """Smart ingredient consolidation with quantity addition and categorization"""
+        from fractions import Fraction
+        import re
+        
+        ingredients_map = {}
+        
+        for recipe_id in recipe_ids:
+            ingredients = self.get_ingredients(recipe_id)
+            for ing in ingredients:
+                text = ing['ingredient_text'].strip()
+                quantity_str = ing.get('quantity', '').strip()
+                unit = ing.get('unit', '').strip()
+                
+                # Normalize ingredient name for matching
+                normalized_name = self._normalize_ingredient_name(text)
+                
+                # Create key for matching (normalized name + unit)
+                key = f"{normalized_name}_{unit.lower()}"
+                
+                if key in ingredients_map:
+                    # Ingredient exists - try to add quantities
+                    existing = ingredients_map[key]
+                    combined_qty = self._add_quantities(existing['quantity'], quantity_str)
+                    existing['quantity'] = combined_qty
+                    existing['count'] += 1
+                else:
+                    # New ingredient
+                    category = self._categorize_ingredient(text)
+                    ingredients_map[key] = {
+                        'text': text,
+                        'quantity': quantity_str,
+                        'unit': unit,
+                        'category': category,
+                        'count': 1
+                    }
+        
+        return ingredients_map
+    
+    def _normalize_ingredient_name(self, text: str) -> str:
+        """Normalize ingredient name for matching"""
+        # Remove common descriptors
+        text = re.sub(r'\b(fresh|frozen|dried|chopped|diced|sliced|minced|grated|shredded|canned)\b', '', text, flags=re.IGNORECASE)
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text).strip().lower()
+        return text
+    
+    def _add_quantities(self, qty1: str, qty2: str) -> str:
+        """Add two quantity strings (supports fractions and decimals)"""
+        if not qty1 and not qty2:
+            return ''
+        if not qty1:
+            return qty2
+        if not qty2:
+            return qty1
+        
+        try:
+            # Convert to fractions for accurate addition
+            from fractions import Fraction
+            
+            # Parse first quantity
+            val1 = self._parse_quantity(qty1)
+            val2 = self._parse_quantity(qty2)
+            
+            if val1 is None or val2 is None:
+                # Can't parse, keep separate
+                return f"{qty1} + {qty2}"
+            
+            # Add them
+            total = val1 + val2
+            
+            # Convert back to string (prefer fractions for common values)
+            if total == int(total):
+                return str(int(total))
+            elif total.denominator in [2, 3, 4, 8]:
+                return str(total)
+            else:
+                return f"{float(total):.2f}".rstrip('0').rstrip('.')
+        
+        except:
+            # Fallback - keep separate
+            return f"{qty1} + {qty2}"
+    
+    def _parse_quantity(self, qty_str: str):
+        """Parse quantity string to Fraction"""
+        from fractions import Fraction
+        import re
+        
+        if not qty_str:
+            return None
+        
+        qty_str = qty_str.strip()
+        
+        # Handle mixed numbers like "1 1/2"
+        mixed_match = re.match(r'(\d+)\s+(\d+)/(\d+)', qty_str)
+        if mixed_match:
+            whole = int(mixed_match.group(1))
+            num = int(mixed_match.group(2))
+            denom = int(mixed_match.group(3))
+            return Fraction(whole) + Fraction(num, denom)
+        
+        # Handle simple fractions like "1/2"
+        if '/' in qty_str:
+            try:
+                return Fraction(qty_str)
+            except:
+                pass
+        
+        # Handle decimals and integers
+        try:
+            return Fraction(float(qty_str))
+        except:
+            return None
+    
+    def _categorize_ingredient(self, text: str) -> str:
+        """Categorize ingredient by type"""
+        text_lower = text.lower()
+        
+        # Dairy (check first for eggs, milk, cheese, etc.)
+        dairy = ['egg', 'milk', 'cream', 'butter', 'cheese', 'yogurt', 'sour cream', 'cottage cheese',
+                 'whipped cream', 'half and half', 'heavy cream', 'yolk', 'white', 'buttermilk',
+                 'parmesan', 'cheddar', 'mozzarella', 'feta', 'ricotta', 'cream cheese']
+        if any(item in text_lower for item in dairy):
+            return 'Dairy'
+        
+        # Produce
+        produce = ['lettuce', 'tomato', 'onion', 'garlic', 'potato', 'carrot', 'celery', 'pepper', 
+                   'apple', 'banana', 'lemon', 'lime', 'orange', 'spinach', 'kale', 'cucumber',
+                   'avocado', 'mushroom', 'zucchini', 'broccoli', 'cauliflower', 'cabbage',
+                   'corn', 'peas', 'bean', 'berry', 'berries', 'peach', 'grape', 'melon',
+                   'squash', 'eggplant', 'radish', 'beet', 'turnip', 'parsley', 'cilantro',
+                   'basil', 'mint', 'thyme', 'rosemary', 'dill', 'chive', 'scallion', 'shallot',
+                   'ginger', 'jalapeno', 'serrano', 'poblano', 'bell pepper', 'cherry', 'strawberry',
+                   'blueberry', 'raspberry', 'blackberry', 'pineapple', 'mango', 'papaya', 'kiwi',
+                   'plum', 'pear', 'nectarine', 'apricot', 'watermelon', 'cantaloupe', 'honeydew',
+                   'green bean', 'snap pea', 'snow pea', 'asparagus', 'artichoke', 'brussels sprout']
+        if any(item in text_lower for item in produce):
+            return 'Produce'
+        
+        # Meat & Poultry
+        meat = ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'sausage', 'bacon', 'ham',
+                'ground beef', 'steak', 'roast', 'chop', 'breast', 'thigh', 'wing', 'drumstick',
+                'tenderloin', 'sirloin', 'ribeye', 'brisket', 'ribs', 'ground turkey',
+                'ground pork', 'ground chicken', 'veal', 'duck', 'goose', 'venison']
+        if any(item in text_lower for item in meat):
+            return 'Meat & Poultry'
+        
+        # Seafood
+        seafood = ['fish', 'salmon', 'tuna', 'shrimp', 'crab', 'lobster', 'cod', 'tilapia',
+                   'halibut', 'scallop', 'clam', 'mussel', 'oyster', 'trout', 'bass', 'catfish',
+                   'mahi', 'snapper', 'swordfish', 'anchovy', 'sardine', 'mackerel', 'herring',
+                   'squid', 'calamari', 'octopus', 'prawns']
+        if any(item in text_lower for item in seafood):
+            return 'Seafood'
+        
+        # Bakery
+        bakery = ['bread', 'roll', 'bun', 'bagel', 'tortilla', 'pita', 'croissant', 'muffin',
+                  'biscuit', 'pastry', 'english muffin', 'naan', 'flatbread', 'ciabatta',
+                  'sourdough', 'rye bread', 'whole wheat bread', 'white bread', 'french bread',
+                  'italian bread', 'baguette', 'pumpernickel', 'focaccia']
+        if any(item in text_lower for item in bakery):
+            return 'Bakery'
+        
+        # Frozen
+        frozen = ['frozen', 'ice cream', 'popsicle', 'sherbet', 'sorbet', 'gelato']
+        if any(item in text_lower for item in frozen):
+            return 'Frozen'
+        
+        # Pantry/Dry Goods (check after more specific categories)
+        pantry = ['flour', 'sugar', 'salt', 'pepper', 'rice', 'pasta', 'oil', 'vinegar',
+                  'sauce', 'soup', 'broth', 'stock', 'can', 'canned', 'spice', 'seasoning',
+                  'baking powder', 'baking soda', 'vanilla', 'extract', 'honey', 'syrup',
+                  'molasses', 'cornstarch', 'cocoa', 'chocolate chip', 'nut', 'almond',
+                  'walnut', 'pecan', 'cashew', 'peanut', 'peanut butter', 'almond butter',
+                  'tahini', 'jam', 'jelly', 'preserves', 'maple syrup', 'corn syrup',
+                  'brown sugar', 'powdered sugar', 'confectioners', 'granulated sugar',
+                  'olive oil', 'vegetable oil', 'canola oil', 'coconut oil', 'sesame oil',
+                  'balsamic', 'red wine vinegar', 'white vinegar', 'apple cider vinegar',
+                  'soy sauce', 'worcestershire', 'hot sauce', 'ketchup', 'mustard', 'mayo',
+                  'mayonnaise', 'relish', 'pickle', 'tomato paste', 'tomato sauce',
+                  'chicken broth', 'beef broth', 'vegetable broth', 'bouillon', 'noodle',
+                  'spaghetti', 'penne', 'macaroni', 'linguine', 'fettuccine', 'lasagna',
+                  'quinoa', 'couscous', 'bulgur', 'barley', 'oat', 'cereal', 'granola',
+                  'cracker', 'chip', 'pretzel', 'popcorn', 'cookie', 'brownie', 'cake mix',
+                  'yeast', 'gelatin', 'cornmeal', 'breadcrumb', 'panko']
+        if any(item in text_lower for item in pantry):
+            return 'Pantry'
+        
+        # Default
+        return 'Other'
     
     def get_shopping_lists(self) -> List[Dict]:
         """Get all shopping lists"""
@@ -527,11 +715,30 @@ class DatabaseManager:
         """)
         return [dict(row) for row in self.cursor.fetchall()]
     
-    def get_shopping_list_items(self, list_id: int) -> List[Dict]:
-        """Get all items in a shopping list"""
-        self.cursor.execute("""
-            SELECT * FROM shopping_list_items WHERE list_id = ? ORDER BY id
-        """, (list_id,))
+    def get_shopping_list_items(self, list_id: int, organized: bool = False) -> List[Dict]:
+        """Get all items in a shopping list, optionally organized by category"""
+        if organized:
+            # Return items organized by category
+            self.cursor.execute("""
+                SELECT * FROM shopping_list_items 
+                WHERE list_id = ? 
+                ORDER BY 
+                    CASE category
+                        WHEN 'Produce' THEN 1
+                        WHEN 'Meat & Poultry' THEN 2
+                        WHEN 'Seafood' THEN 3
+                        WHEN 'Dairy' THEN 4
+                        WHEN 'Bakery' THEN 5
+                        WHEN 'Frozen' THEN 6
+                        WHEN 'Pantry' THEN 7
+                        ELSE 8
+                    END,
+                    ingredient_text
+            """, (list_id,))
+        else:
+            self.cursor.execute("""
+                SELECT * FROM shopping_list_items WHERE list_id = ? ORDER BY id
+            """, (list_id,))
         return [dict(row) for row in self.cursor.fetchall()]
     
     def toggle_shopping_item(self, item_id: int):

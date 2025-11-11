@@ -18,6 +18,21 @@ except ImportError:
     WIA_AVAILABLE = False
     print("Warning: pywin32 not available. Scanner functionality will be limited.")
 
+# Try to import PDF libraries
+try:
+    import fitz  # PyMuPDF
+    PDF_AVAILABLE = True
+    PDF_BACKEND = "pymupdf"
+except ImportError:
+    try:
+        from pdf2image import convert_from_path
+        PDF_AVAILABLE = True
+        PDF_BACKEND = "pdf2image"
+    except ImportError:
+        PDF_AVAILABLE = False
+        PDF_BACKEND = None
+        print("Warning: No PDF library available. Install PyMuPDF with: pip install PyMuPDF")
+
 
 class ScannerInterface:
     """Interface for scanning documents using Windows WIA"""
@@ -133,65 +148,199 @@ class ScannerInterface:
             print(f"Error scanning image: {e}")
             return None
     
-    def scan_with_dialog(self) -> Optional[str]:
+    def scan_with_dialog(self) -> Optional[List[str]]:
         """
         Show Windows scan dialog and scan image
-        Easier for users - lets Windows handle all settings
+        Uses the standard Windows scanning dialog which allows user to select:
+        - Flatbed vs Document Feeder
+        - Resolution, color mode, etc.
         
         Returns:
-            Path to saved image file, or None if cancelled
+            List with single scanned image path, or None if cancelled
+            (Returns list for consistency with multi-page workflow)
         """
         if not self.is_available():
             return None
         
         try:
-            # Show scan dialog - user can adjust all settings
+            base_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            print(f"DEBUG: Showing Windows scan dialog...")
+            print(f"DEBUG: Save directory: {self.save_directory}")
+            
+            # Show the standard Windows scan dialog
+            # This lets the user choose flatbed vs feeder, resolution, color, etc.
             image = self.wia.ShowAcquireImage(1)  # Type 1 = Scanner
             
-            if image:
-                # Generate filename
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"recipe_scan_{timestamp}.png"
-                filepath = self.save_directory / filename
-                
-                # Save image
-                image.SaveFile(str(filepath))
-                
-                return str(filepath)
-            else:
+            if not image:
+                print("DEBUG: User cancelled scan or no image returned")
                 return None
+            
+            # Save the scanned image
+            filename = f"recipe_scan_{base_timestamp}_page1.png"
+            filepath = self.save_directory / filename
+            image.SaveFile(str(filepath))
+            print(f"DEBUG: Saved: {filepath}")
+            
+            # Return as list for consistency
+            return [str(filepath)]
                 
         except Exception as e:
-            print(f"Error in scan dialog: {e}")
+            print(f"ERROR in scan_with_dialog: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
-    def scan_from_file(self, file_path: str) -> Optional[str]:
+    def scan_multiple_pages(self, color_mode: str = "color", resolution: int = 300) -> Optional[List[str]]:
         """
-        Import an existing image file (for testing or manual import)
-        Copies file to scanned_images directory
+        Scan multiple pages from document feeder automatically
+        Continues scanning until feeder is empty
         
         Args:
-            file_path: Path to existing image file
+            color_mode: 'color', 'grayscale', or 'bw'
+            resolution: DPI (dots per inch)
         
         Returns:
-            Path to copied image in scanned directory
+            List of paths to saved image files, or None if scan failed
+        """
+        if not self.is_available():
+            return None
+        
+        try:
+            # If no scanner selected, prompt for selection
+            if not self.scanner:
+                if not self.select_scanner():
+                    return None
+            
+            scanned_pages = []
+            base_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            page_num = 1
+            max_pages = 50  # Safety limit
+            
+            # Color mode setting
+            color_code = {
+                'bw': 1,
+                'grayscale': 2,
+                'color': 4
+            }.get(color_mode.lower(), 4)
+            
+            while page_num <= max_pages:
+                try:
+                    item = self.scanner.Items(1)
+                    
+                    # Set scan properties for each page
+                    try:
+                        item.Properties("6146").Value = color_code
+                        item.Properties("6147").Value = resolution
+                        item.Properties("6148").Value = resolution
+                    except:
+                        pass
+                    
+                    # Perform scan
+                    image = item.Transfer("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}")
+                    
+                    if image:
+                        filename = f"recipe_scan_{base_timestamp}_page{page_num}.png"
+                        filepath = self.save_directory / filename
+                        image.SaveFile(str(filepath))
+                        scanned_pages.append(str(filepath))
+                        print(f"Scanned page {page_num}: {filepath}")
+                        page_num += 1
+                    else:
+                        break
+                        
+                except Exception as e:
+                    # Feeder is empty or error occurred
+                    print(f"Finished scanning: {e}")
+                    break
+            
+            print(f"Total pages scanned: {len(scanned_pages)}")
+            return scanned_pages if scanned_pages else None
+            
+        except Exception as e:
+            print(f"Error scanning multiple pages: {e}")
+            return None
+    
+    def scan_from_file(self, file_path: str) -> Optional[List[str]]:
+        """
+        Import an existing image or PDF file (for testing or manual import)
+        Copies file to scanned_images directory, or converts PDF to images
+        
+        Args:
+            file_path: Path to existing image or PDF file
+        
+        Returns:
+            List of paths to copied/converted images in scanned directory
         """
         try:
             source = Path(file_path)
             if not source.exists():
                 return None
             
-            # Copy to scanned images directory with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            extension = source.suffix
-            filename = f"recipe_import_{timestamp}{extension}"
-            destination = self.save_directory / filename
+            extension = source.suffix.lower()
             
-            # Copy file
-            import shutil
-            shutil.copy2(source, destination)
+            # Handle PDF files
+            if extension == '.pdf':
+                if not PDF_AVAILABLE:
+                    print("Error: PDF library not installed. Cannot import PDF files.")
+                    print("Install with: pip install PyMuPDF")
+                    return None
+                
+                try:
+                    # Convert PDF to images (one image per page)
+                    print(f"Converting PDF to images using {PDF_BACKEND}...")
+                    converted_paths = []
+                    
+                    if PDF_BACKEND == "pymupdf":
+                        # Use PyMuPDF (faster, no external dependencies)
+                        import fitz
+                        pdf_document = fitz.open(str(source))
+                        
+                        for page_num in range(len(pdf_document)):
+                            page = pdf_document[page_num]
+                            # Render page to image at 300 DPI
+                            mat = fitz.Matrix(300/72, 300/72)  # 72 is default DPI
+                            pix = page.get_pixmap(matrix=mat)
+                            
+                            filename = f"recipe_import_{timestamp}_page{page_num + 1}.png"
+                            destination = self.save_directory / filename
+                            pix.save(destination)
+                            converted_paths.append(str(destination))
+                            print(f"Converted PDF page {page_num + 1} to {destination}")
+                        
+                        pdf_document.close()
+                    
+                    else:  # pdf2image backend
+                        from pdf2image import convert_from_path
+                        images = convert_from_path(str(source), dpi=300)
+                        
+                        for i, image in enumerate(images, start=1):
+                            filename = f"recipe_import_{timestamp}_page{i}.png"
+                            destination = self.save_directory / filename
+                            image.save(destination, 'PNG')
+                            converted_paths.append(str(destination))
+                            print(f"Converted PDF page {i} to {destination}")
+                    
+                    print(f"Successfully converted {len(converted_paths)} page(s) from PDF")
+                    return converted_paths
+                    
+                except Exception as e:
+                    print(f"Error converting PDF: {e}")
+                    if PDF_BACKEND == "pdf2image":
+                        print("Make sure poppler is installed: https://github.com/oschwartz10612/poppler-windows/releases/")
+                    return None
             
-            return str(destination)
+            # Handle regular image files
+            else:
+                filename = f"recipe_import_{timestamp}{extension}"
+                destination = self.save_directory / filename
+                
+                # Copy file
+                import shutil
+                shutil.copy2(source, destination)
+                
+                return [str(destination)]
             
         except Exception as e:
             print(f"Error importing file: {e}")
@@ -289,16 +438,67 @@ class ScannerInterface:
             return False
 
 
+    def combine_pages_to_single_image(self, image_paths: List[str], output_path: Optional[str] = None) -> Optional[str]:
+        """
+        Combine multiple scanned pages into a single vertical image
+        Useful for creating a single image from multi-page scans
+        
+        Args:
+            image_paths: List of image file paths to combine
+            output_path: Optional output path. If None, auto-generates filename
+        
+        Returns:
+            Path to combined image file, or None if failed
+        """
+        try:
+            if not image_paths:
+                return None
+            
+            # Load all images
+            images = [Image.open(path) for path in image_paths]
+            
+            # Calculate total height and max width
+            widths = [img.width for img in images]
+            heights = [img.height for img in images]
+            max_width = max(widths)
+            total_height = sum(heights)
+            
+            # Create new image with white background
+            combined = Image.new('RGB', (max_width, total_height), 'white')
+            
+            # Paste images vertically
+            y_offset = 0
+            for img in images:
+                combined.paste(img, (0, y_offset))
+                y_offset += img.height
+            
+            # Generate output path if not provided
+            if not output_path:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"recipe_scan_{timestamp}_combined.png"
+                output_path = str(self.save_directory / filename)
+            
+            # Save combined image
+            combined.save(output_path, quality=95)
+            print(f"Combined {len(images)} pages into: {output_path}")
+            
+            return output_path
+            
+        except Exception as e:
+            print(f"Error combining pages: {e}")
+            return None
+
+
 # Utility function for quick scanning
-def quick_scan(save_dir: str = "data/scanned_images") -> Optional[str]:
+def quick_scan(save_dir: str = "data/scanned_images") -> Optional[List[str]]:
     """
-    Quick scan function - shows dialog and returns scanned image path
+    Quick scan function - shows dialog and returns scanned image path(s)
     
     Args:
         save_dir: Directory to save scanned images
     
     Returns:
-        Path to scanned image or None
+        List of paths to scanned images or None
     """
     scanner = ScannerInterface(save_dir)
     if not scanner.is_available():

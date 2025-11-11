@@ -4,7 +4,8 @@ Test script to check what data is actually available for each ticker
 import yfinance as yf
 from datetime import datetime, timedelta
 
-tickers = ['NVDW', 'AMDW', 'HOOW', 'MSFW', 'GOOW', 'NFLW', 'XOMO', 'JPOW', 'TSLW', 'QDTE']
+tickers = ['NVDW', 'AMDW', 'HOOW', 'MSFW', 'GOOW', 'NFLW', 'XOMO', 'JPOW', 'TSLW', 'QDTE', 
+           'XDTE', 'MSTY', 'NVDY', 'TSLY', 'BRKW']
 
 print("="*80)
 print("CHECKING DATA AVAILABILITY FOR WEEKLY DIVIDEND ETFS")
